@@ -17,6 +17,7 @@ async function getGraphToken() {
     }),
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
   );
+
   return res.data.access_token;
 }
 
@@ -27,7 +28,10 @@ function cleanText(value) {
 }
 
 function normalize(value) {
-  return cleanText(value).replace(/\s+/g, ' ').trim().toLowerCase();
+  return cleanText(value)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 async function getBotUser(telegramId) {
@@ -60,7 +64,9 @@ async function getAnyBotUser(telegramId) {
 
 async function createPendingBotUser(ctx) {
   const token = await getGraphToken();
-  const fullName = `${ctx.from.first_name || ''} ${ctx.from.last_name || ''}`.trim();
+
+  const fullName =
+    `${ctx.from.first_name || ''} ${ctx.from.last_name || ''}`.trim();
 
   await axios.post(
     `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/items`,
@@ -81,10 +87,20 @@ async function createPendingBotUser(ctx) {
 
 async function hasSubmittedToday(telegramId) {
   const token = await getGraphToken();
+
   const today = new Date();
 
-  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+  const startOfDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  ).toISOString();
+
+  const endOfDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + 1
+  ).toISOString();
 
   const res = await axios.get(
     `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
@@ -103,7 +119,12 @@ async function createSubmission(ctx, data, userData) {
   const token = await getGraphToken();
 
   const totalDonations =
-    data.d10 + data.d20 + data.d25 + data.d30 + data.d35 + data.d40;
+    data.d10 +
+    data.d20 +
+    data.d25 +
+    data.d30 +
+    data.d35 +
+    data.d40;
 
   await axios.post(
     `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items`,
@@ -142,7 +163,7 @@ bot.start(async (ctx) => {
 
   if (activeUser) {
     return ctx.reply(
-`✅ Welcome ${activeUser.fields.LinkTitle}!
+`✅ Welcome ${activeUser.fields.Title || activeUser.fields.LinkTitle}!
 
 Use /submit to submit your shift report.
 Use /help to see all commands.`
@@ -280,9 +301,15 @@ bot.command('mytablet', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
 
-    if (!user) return ctx.reply('❌ Unauthorized.');
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
 
-    const repName = normalize(user.fields.LinkTitle);
+    const repName = normalize(
+      user.fields.Title ||
+      user.fields.LinkTitle
+    );
+
     const token = await getGraphToken();
 
     const res = await axios.get(
@@ -291,11 +318,21 @@ bot.command('mytablet', async (ctx) => {
     );
 
     const tablet = res.data.value.find(item => {
-      const holder = normalize(item.fields.CurrentHolder);
-      return holder === repName || holder.includes(repName) || repName.includes(holder);
+      const holder = normalize(
+        item.fields.CurrentHolder ||
+        item.fields.CurrentRepHolder
+      );
+
+      return (
+        holder === repName ||
+        holder.includes(repName) ||
+        repName.includes(holder)
+      );
     });
 
-    if (!tablet) return ctx.reply('📱 No tablet assigned to you.');
+    if (!tablet) {
+      return ctx.reply('📱 No tablet assigned to you.');
+    }
 
     const f = tablet.fields;
 
@@ -323,13 +360,26 @@ Last Action By: ${cleanText(f.LastActionBy)}`
 bot.command('mysales', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
-    if (!user) return ctx.reply('❌ Unauthorized.');
+
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
 
     const token = await getGraphToken();
+
     const today = new Date();
 
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    ).toISOString();
+
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    ).toISOString();
 
     const res = await axios.get(
       `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
@@ -380,13 +430,26 @@ $40: ${item._x0024_40Donations || 0}
 bot.command('leaderboard', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
-    if (!user) return ctx.reply('❌ Unauthorized.');
+
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
 
     const token = await getGraphToken();
+
     const today = new Date();
 
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    ).toISOString();
+
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    ).toISOString();
 
     const res = await axios.get(
       `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
@@ -394,14 +457,19 @@ bot.command('leaderboard', async (ctx) => {
     );
 
     const ranked = res.data.value
-      .filter(item => item.fields.ShiftDate >= startOfDay && item.fields.ShiftDate < endOfDay)
+      .filter(item =>
+        item.fields.ShiftDate >= startOfDay &&
+        item.fields.ShiftDate < endOfDay
+      )
       .map(item => ({
         rep: cleanText(item.fields.RepName) || 'Unknown Rep',
         total: item.fields.TotalDonations || 0
       }))
       .sort((a, b) => b.total - a.total);
 
-    if (ranked.length === 0) return ctx.reply('No submissions today yet.');
+    if (ranked.length === 0) {
+      return ctx.reply('No submissions today yet.');
+    }
 
     let message = '🏆 Today’s Leaderboard\n\n';
 
@@ -419,23 +487,39 @@ bot.command('leaderboard', async (ctx) => {
 bot.command('teamtoday', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
-    if (!user) return ctx.reply('❌ Unauthorized.');
+
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
 
     const roles = user.fields.Role || [];
-    if (!roles.includes('TL')) return ctx.reply('❌ Only Team Leads can use this command.');
+
+    if (!roles.includes('TL')) {
+      return ctx.reply('❌ Only Team Leads can use this command.');
+    }
 
     const token = await getGraphToken();
+
     const today = new Date();
 
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    ).toISOString();
+
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    ).toISOString();
 
     const res = await axios.get(
       `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    const tlName = cleanText(user.fields.LinkTitle);
+    const tlName = cleanText(user.fields.Title || user.fields.LinkTitle);
 
     const todaySubs = res.data.value.filter(
       item =>
@@ -444,18 +528,24 @@ bot.command('teamtoday', async (ctx) => {
         item.fields.ShiftDate < endOfDay
     );
 
-    if (todaySubs.length === 0) return ctx.reply('No team submissions today.');
+    if (todaySubs.length === 0) {
+      return ctx.reply('No team submissions today.');
+    }
 
     let total = 0;
+
     let message = '📊 Team Today\n\n';
 
     todaySubs.forEach(item => {
       const repTotal = item.fields.TotalDonations || 0;
+
       total += repTotal;
+
       message += `${cleanText(item.fields.RepName)} - ${repTotal}\n`;
     });
 
     message += `\n🔥 Team Total: ${total}`;
+
     ctx.reply(message);
   } catch (error) {
     console.log(error.response?.data || error.message);
@@ -467,7 +557,9 @@ bot.command('submit', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
 
-    if (!user) return ctx.reply('❌ You are not authorized to submit.');
+    if (!user) {
+      return ctx.reply('❌ You are not authorized to submit.');
+    }
 
     const alreadySubmitted = await hasSubmittedToday(ctx.from.id);
 
@@ -479,7 +571,7 @@ bot.command('submit', async (ctx) => {
       step: 'd10',
       data: {},
       user: {
-        RepName: user.fields.LinkTitle || '',
+        RepName: user.fields.Title || user.fields.LinkTitle || '',
         RepEmail: user.fields.Email || '',
         TLName: user.fields.TL_x002f_MangerName || '',
         MarketCity: user.fields.Market_x002f_City || ''
@@ -495,12 +587,18 @@ bot.command('submit', async (ctx) => {
 
 bot.on('text', async (ctx) => {
   const userId = ctx.from.id;
+
   const text = ctx.message.text.trim();
 
-  if (text.startsWith('/')) return;
+  if (text.startsWith('/')) {
+    return;
+  }
 
   const session = sessions[userId];
-  if (!session) return;
+
+  if (!session) {
+    return;
+  }
 
   if (text.toLowerCase() === 'cancel') {
     delete sessions[userId];
@@ -577,6 +675,7 @@ Type YES to submit or CANCEL to cancel.`
         }
 
         await createSubmission(ctx, session.data, session.user);
+
         delete sessions[userId];
 
         return ctx.reply('✅ End-of-shift submission saved successfully.');
