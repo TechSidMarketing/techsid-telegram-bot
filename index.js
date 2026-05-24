@@ -62,6 +62,45 @@ async function getBotUser(telegramId) {
 }
 
 // ======================
+// CHECK TODAY SUBMISSION
+// ======================
+
+async function hasSubmittedToday(telegramId) {
+
+  const token = await getGraphToken();
+
+  const today = new Date();
+
+  const startOfDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  ).toISOString();
+
+  const endOfDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + 1
+  ).toISOString();
+
+  const response = await axios.get(
+    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  return response.data.value.some(item =>
+    item.fields.TelegramUserID === String(telegramId) &&
+    item.fields.ShiftDate >= startOfDay &&
+    item.fields.ShiftDate < endOfDay
+  );
+
+}
+
+// ======================
 // CREATE SUBMISSION
 // ======================
 
@@ -79,6 +118,8 @@ async function createSubmission(ctx, data, userData) {
       RepEmail: userData.RepEmail,
 
       TelegramUserID: String(ctx.from.id),
+
+      ShiftDate: new Date().toISOString(),
 
       TLName: userData.TLName,
 
@@ -138,7 +179,11 @@ bot.start(async (ctx) => {
 bot.command('help', (ctx) => {
 
   ctx.reply(
-    `Commands:\n\n/start\n/submit\n/help`
+    `Commands:
+
+/start
+/submit
+/help`
   );
 
 });
@@ -155,6 +200,16 @@ bot.command('submit', async (ctx) => {
 
     return ctx.reply(
       '❌ You are not authorized to submit.'
+    );
+
+  }
+
+  const alreadySubmitted = await hasSubmittedToday(ctx.from.id);
+
+  if (alreadySubmitted) {
+
+    return ctx.reply(
+      '❌ You have already submitted your shift report today.'
     );
 
   }
