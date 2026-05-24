@@ -15,7 +15,11 @@ async function getGraphToken() {
       scope: 'https://graph.microsoft.com/.default',
       grant_type: 'client_credentials'
     }),
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    }
   );
 
   return tokenResponse.data.access_token;
@@ -208,8 +212,62 @@ bot.command('help', (ctx) => {
 /mysales - View your sales today
 /teamtoday - TL only: View today's team sales
 /leaderboard - View today's leaderboard
+/findlists - Show Microsoft Lists
+/tabletcolumns - Show tablet list columns
 /help - View help menu`
   );
+});
+
+bot.command('findlists', async (ctx) => {
+  try {
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const lists = response.data.value
+      .map(list => `${list.displayName} = ${list.id}`)
+      .join('\n\n');
+
+    ctx.reply(lists);
+
+  } catch (error) {
+    console.log(error.response?.data || error.message);
+
+    ctx.reply('❌ Could not find lists.');
+  }
+});
+
+bot.command('tabletcolumns', async (ctx) => {
+  try {
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.TABLET_INVENTORY_LIST_ID}/columns`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const columns = response.data.value
+      .map(col => `${col.displayName} = ${col.name}`)
+      .join('\n');
+
+    ctx.reply(columns);
+
+  } catch (error) {
+    console.log(error.response?.data || error.message);
+
+    ctx.reply('❌ Could not get tablet columns.');
+  }
 });
 
 bot.command('teamtoday', async (ctx) => {
@@ -478,7 +536,9 @@ bot.on('text', async (ctx) => {
   const askNumber = value => {
     const num = Number(value);
 
-    return Number.isInteger(num) && num >= 0 ? num : null;
+    return Number.isInteger(num) && num >= 0
+      ? num
+      : null;
   };
 
   try {
@@ -602,4 +662,5 @@ bot.launch();
 console.log('TechSid Telegram Bot is running...');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
+
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
