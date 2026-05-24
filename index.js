@@ -21,6 +21,12 @@ async function getGraphToken() {
   return tokenResponse.data.access_token;
 }
 
+function cleanText(value) {
+  if (Array.isArray(value)) return value.join(', ');
+  if (value === null || value === undefined) return '';
+  return String(value);
+}
+
 async function getBotUser(telegramId) {
   const token = await getGraphToken();
 
@@ -34,6 +40,48 @@ async function getBotUser(telegramId) {
       user.fields.TelegramUserID === String(telegramId) &&
       user.fields.Active === true
   ) || null;
+}
+
+async function getAnyBotUser(telegramId) {
+  const token = await getGraphToken();
+
+  const response = await axios.get(
+    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/items?expand=fields`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  return response.data.value.find(
+    user => user.fields.TelegramUserID === String(telegramId)
+  ) || null;
+}
+
+async function createPendingBotUser(ctx) {
+  const token = await getGraphToken();
+
+  const fullName = `${ctx.from.first_name || ''} ${ctx.from.last_name || ''}`.trim();
+
+  const payload = {
+    fields: {
+      Title: fullName || ctx.from.username || 'Pending User',
+      Email: '',
+      TelegramUserID: String(ctx.from.id),
+      Role: ['Rep'],
+      TL_x002f_MangerName: '',
+      Market_x002f_City: '',
+      Active: false
+    }
+  };
+
+  await axios.post(
+    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/items`,
+    payload,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
 }
 
 async function hasSubmittedToday(telegramId) {
@@ -53,12 +101,6 @@ async function hasSubmittedToday(telegramId) {
     item.fields.ShiftDate >= startOfDay &&
     item.fields.ShiftDate < endOfDay
   );
-}
-
-function cleanText(value) {
-  if (Array.isArray(value)) return value.join(', ');
-  if (value === null || value === undefined) return '';
-  return String(value);
 }
 
 async function createSubmission(ctx, data, userData) {
@@ -107,17 +149,35 @@ async function createSubmission(ctx, data, userData) {
 }
 
 bot.start(async (ctx) => {
-  const user = await getBotUser(ctx.from.id);
+  const activeUser = await getBotUser(ctx.from.id);
 
-  if (!user) {
+  if (activeUser) {
     return ctx.reply(
-      `❌ You are not authorized.\n\nPlease contact management and provide this Telegram ID:\n${ctx.from.id}`
+      `Welcome ${activeUser.fields.LinkTitle}!\n\nUse /submit to submit your shift report.`
     );
   }
 
-  ctx.reply(
-    `Welcome ${user.fields.LinkTitle}!\n\nUse /submit to submit your shift report.`
-  );
+  const existingUser = await getAnyBotUser(ctx.from.id);
+
+  if (existingUser) {
+    return ctx.reply(
+      `⏳ Your access request is pending approval.\n\nYour Telegram ID is:\n${ctx.from.id}\n\nManagement needs to activate your profile before you can submit.`
+    );
+  }
+
+  try {
+    await createPendingBotUser(ctx);
+
+    return ctx.reply(
+      `✅ Access request submitted.\n\nYour Telegram ID is:\n${ctx.from.id}\n\nManagement will approve your access shortly.`
+    );
+  } catch (error) {
+    console.log(error.response?.data || error.message);
+
+    return ctx.reply(
+      `❌ Could not submit access request.\n\nPlease contact management and provide this Telegram ID:\n${ctx.from.id}`
+    );
+  }
 });
 
 bot.command('help', (ctx) => {
@@ -137,9 +197,7 @@ bot.command('teamtoday', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
 
-    if (!user) {
-      return ctx.reply('❌ Unauthorized.');
-    }
+    if (!user) return ctx.reply('❌ Unauthorized.');
 
     const userRoles = user.fields.Role || [];
 
@@ -155,7 +213,6 @@ bot.command('teamtoday', async (ctx) => {
     );
 
     const today = new Date();
-
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
 
@@ -195,9 +252,7 @@ bot.command('leaderboard', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
 
-    if (!user) {
-      return ctx.reply('❌ Unauthorized.');
-    }
+    if (!user) return ctx.reply('❌ Unauthorized.');
 
     const token = await getGraphToken();
 
@@ -207,7 +262,6 @@ bot.command('leaderboard', async (ctx) => {
     );
 
     const today = new Date();
-
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
 
@@ -244,9 +298,7 @@ bot.command('mysales', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
 
-    if (!user) {
-      return ctx.reply('❌ Unauthorized.');
-    }
+    if (!user) return ctx.reply('❌ Unauthorized.');
 
     const token = await getGraphToken();
 
@@ -256,7 +308,6 @@ bot.command('mysales', async (ctx) => {
     );
 
     const today = new Date();
-
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
 
