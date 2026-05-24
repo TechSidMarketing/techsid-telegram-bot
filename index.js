@@ -194,6 +194,31 @@ async function createSubmission(ctx, data, userData) {
   );
 }
 
+bot.command('siteid', async (ctx) => {
+
+  try {
+
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      'https://graph.microsoft.com/v1.0/sites/techsidmktg.sharepoint.com:/sites/Globalfaces',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    ctx.reply(`SITE ID:\n\n${response.data.id}`);
+
+  } catch (error) {
+
+    console.log(error.response?.data || error.message);
+
+    ctx.reply('❌ Could not get site ID.');
+  }
+});
+
 bot.start(async (ctx) => {
 
   const activeUser = await getBotUser(ctx.from.id);
@@ -259,6 +284,7 @@ bot.command('help', (ctx) => {
 /leaderboard - View today's leaderboard
 /findlists - Show Microsoft Lists
 /tabletcolumns - Show tablet list columns
+/siteid - Show current SharePoint Site ID
 /help - View help menu`
   );
 });
@@ -393,422 +419,6 @@ Last Action By: ${cleanText(fields.LastActionBy)}`;
     console.log(error.response?.data || error.message);
 
     ctx.reply('❌ Failed to load tablet details.');
-  }
-});
-
-bot.command('teamtoday', async (ctx) => {
-
-  try {
-
-    const user = await getBotUser(ctx.from.id);
-
-    if (!user) {
-      return ctx.reply('❌ Unauthorized.');
-    }
-
-    const userRoles = user.fields.Role || [];
-
-    if (!userRoles.includes('TL')) {
-      return ctx.reply('❌ Only Team Leads can use this command.');
-    }
-
-    const token = await getGraphToken();
-
-    const response = await axios.get(
-      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    const today = new Date();
-
-    const startOfDay = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    ).toISOString();
-
-    const endOfDay = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() + 1
-    ).toISOString();
-
-    const tlName = cleanText(user.fields.LinkTitle);
-
-    const todaySubs = response.data.value.filter(
-      item =>
-        cleanText(item.fields.TLName) === tlName &&
-        item.fields.ShiftDate >= startOfDay &&
-        item.fields.ShiftDate < endOfDay
-    );
-
-    if (todaySubs.length === 0) {
-      return ctx.reply('No team submissions today.');
-    }
-
-    let total = 0;
-
-    let message = '📊 Team Today\n\n';
-
-    todaySubs.forEach(item => {
-
-      const rep = cleanText(item.fields.RepName) || 'Unknown Rep';
-
-      const repTotal = item.fields.TotalDonations || 0;
-
-      total += repTotal;
-
-      message += `${rep} - ${repTotal}\n`;
-    });
-
-    message += `\n🔥 Team Total: ${total}`;
-
-    ctx.reply(message);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    ctx.reply('❌ Failed to load team report.');
-  }
-});
-
-bot.command('leaderboard', async (ctx) => {
-
-  try {
-
-    const user = await getBotUser(ctx.from.id);
-
-    if (!user) {
-      return ctx.reply('❌ Unauthorized.');
-    }
-
-    const token = await getGraphToken();
-
-    const response = await axios.get(
-      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    const today = new Date();
-
-    const startOfDay = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    ).toISOString();
-
-    const endOfDay = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() + 1
-    ).toISOString();
-
-    const todaySubs = response.data.value.filter(
-      item =>
-        item.fields.ShiftDate >= startOfDay &&
-        item.fields.ShiftDate < endOfDay
-    );
-
-    if (todaySubs.length === 0) {
-      return ctx.reply('No submissions today yet.');
-    }
-
-    const ranked = todaySubs
-      .map(item => ({
-        rep: cleanText(item.fields.RepName) || 'Unknown Rep',
-        total: item.fields.TotalDonations || 0
-      }))
-      .sort((a, b) => b.total - a.total);
-
-    let message = '🏆 Today’s Leaderboard\n\n';
-
-    ranked.forEach((item, index) => {
-      message += `${index + 1}. ${item.rep} - ${item.total}\n`;
-    });
-
-    ctx.reply(message);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    ctx.reply('❌ Failed to load leaderboard.');
-  }
-});
-
-bot.command('mysales', async (ctx) => {
-
-  try {
-
-    const user = await getBotUser(ctx.from.id);
-
-    if (!user) {
-      return ctx.reply('❌ Unauthorized.');
-    }
-
-    const token = await getGraphToken();
-
-    const response = await axios.get(
-      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    const today = new Date();
-
-    const startOfDay = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    ).toISOString();
-
-    const endOfDay = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() + 1
-    ).toISOString();
-
-    const mySubmissions = response.data.value.filter(
-      item =>
-        item.fields.TelegramUserID === String(ctx.from.id) &&
-        item.fields.ShiftDate >= startOfDay &&
-        item.fields.ShiftDate < endOfDay
-    );
-
-    if (mySubmissions.length === 0) {
-      return ctx.reply('You have not submitted any sales today yet.');
-    }
-
-    const item = mySubmissions[0].fields;
-
-    const actualTotal =
-      (item._x0024_10Donations || 0) +
-      (item._x0024_20Donations || 0) +
-      (item._x0024_25Donations || 0) +
-      (item._x0024_30Donations || 0) +
-      (item._x0024_35Donations || 0) +
-      (item._x0024_40Donations || 0);
-
-    const message =
-`📊 My Sales Today
-
-$10: ${item._x0024_10Donations || 0}
-$20: ${item._x0024_20Donations || 0}
-$25: ${item._x0024_25Donations || 0}
-$30: ${item._x0024_30Donations || 0}
-$35: ${item._x0024_35Donations || 0}
-$40: ${item._x0024_40Donations || 0}
-
-🔥 Total Donations: ${item.TotalDonations || actualTotal}
-
-📌 Status: ${item.Status || 'Submitted'}`;
-
-    ctx.reply(message);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    ctx.reply('❌ Failed to load your sales.');
-  }
-});
-
-bot.command('submit', async (ctx) => {
-
-  const user = await getBotUser(ctx.from.id);
-
-  if (!user) {
-    return ctx.reply('❌ You are not authorized to submit.');
-  }
-
-  const alreadySubmitted = await hasSubmittedToday(ctx.from.id);
-
-  if (alreadySubmitted) {
-    return ctx.reply('❌ You have already submitted your shift report today.');
-  }
-
-  sessions[ctx.from.id] = {
-    step: 'd10',
-    data: {},
-    user: {
-      RepName: user.fields.LinkTitle || '',
-      RepEmail: user.fields.Email || '',
-      TLName: user.fields.TL_x002f_MangerName || '',
-      MarketCity: user.fields.Market_x002f_City || ''
-    }
-  };
-
-  ctx.reply('How many $10 donations did you get?');
-});
-
-bot.on('text', async (ctx) => {
-
-  const userId = ctx.from.id;
-
-  const text = ctx.message.text.trim();
-
-  if (text.startsWith('/')) {
-    return;
-  }
-
-  const session = sessions[userId];
-
-  if (!session) {
-    return;
-  }
-
-  if (text.toLowerCase() === 'cancel') {
-
-    delete sessions[userId];
-
-    return ctx.reply('❌ Submission cancelled.');
-  }
-
-  const askNumber = value => {
-
-    const num = Number(value);
-
-    return Number.isInteger(num) && num >= 0
-      ? num
-      : null;
-  };
-
-  try {
-
-    switch (session.step) {
-
-      case 'd10':
-
-        session.data.d10 = askNumber(text);
-
-        if (session.data.d10 === null) {
-          return ctx.reply('Please enter a valid number.');
-        }
-
-        session.step = 'd20';
-
-        return ctx.reply('How many $20 donations did you get?');
-
-      case 'd20':
-
-        session.data.d20 = askNumber(text);
-
-        if (session.data.d20 === null) {
-          return ctx.reply('Please enter a valid number.');
-        }
-
-        session.step = 'd25';
-
-        return ctx.reply('How many $25 donations did you get?');
-
-      case 'd25':
-
-        session.data.d25 = askNumber(text);
-
-        if (session.data.d25 === null) {
-          return ctx.reply('Please enter a valid number.');
-        }
-
-        session.step = 'd30';
-
-        return ctx.reply('How many $30 donations did you get?');
-
-      case 'd30':
-
-        session.data.d30 = askNumber(text);
-
-        if (session.data.d30 === null) {
-          return ctx.reply('Please enter a valid number.');
-        }
-
-        session.step = 'd35';
-
-        return ctx.reply('How many $35 donations did you get?');
-
-      case 'd35':
-
-        session.data.d35 = askNumber(text);
-
-        if (session.data.d35 === null) {
-          return ctx.reply('Please enter a valid number.');
-        }
-
-        session.step = 'd40';
-
-        return ctx.reply('How many $40 donations did you get?');
-
-      case 'd40':
-
-        session.data.d40 = askNumber(text);
-
-        if (session.data.d40 === null) {
-          return ctx.reply('Please enter a valid number.');
-        }
-
-        session.step = 'confirm';
-
-        return ctx.reply(
-`Confirm submission:
-
-$10: ${session.data.d10}
-$20: ${session.data.d20}
-$25: ${session.data.d25}
-$30: ${session.data.d30}
-$35: ${session.data.d35}
-$40: ${session.data.d40}
-
-🔥 Total Donations: ${
-  session.data.d10 +
-  session.data.d20 +
-  session.data.d25 +
-  session.data.d30 +
-  session.data.d35 +
-  session.data.d40
-}
-
-Type YES to submit or CANCEL to cancel.`
-        );
-
-      case 'confirm':
-
-        if (text.toLowerCase() !== 'yes') {
-          return ctx.reply(
-            'Type YES to submit or CANCEL to cancel.'
-          );
-        }
-
-        await createSubmission(
-          ctx,
-          session.data,
-          session.user
-        );
-
-        delete sessions[userId];
-
-        return ctx.reply(
-          '✅ End-of-shift submission saved successfully.'
-        );
-    }
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    return ctx.reply(
-      '❌ Submission failed. Please contact management.'
-    );
   }
 });
 
