@@ -8,7 +8,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const sessions = {};
 
 // ======================
-// MICROSOFT TOKEN
+// GET MICROSOFT TOKEN
 // ======================
 
 async function getGraphToken() {
@@ -33,7 +33,7 @@ async function getGraphToken() {
 }
 
 // ======================
-// CHECK IF USER IS ACTIVE
+// GET ACTIVE BOT USER
 // ======================
 
 async function getBotUser(telegramId) {
@@ -53,7 +53,8 @@ async function getBotUser(telegramId) {
 
   const foundUser = users.find(
     user =>
-      user.fields.TelegramUserID === String(telegramId)
+      user.fields.TelegramUserID === String(telegramId) &&
+      user.fields.Active === true
   );
 
   return foundUser || null;
@@ -125,7 +126,7 @@ bot.start(async (ctx) => {
   }
 
   ctx.reply(
-    `Welcome ${user.fields.RepName}!\n\nUse /submit to submit your shift report.`
+    `Welcome ${user.fields.LinkTitle}!\n\nUse /submit to submit your shift report.`
   );
 
 });
@@ -137,43 +138,8 @@ bot.start(async (ctx) => {
 bot.command('help', (ctx) => {
 
   ctx.reply(
-    `Commands:\n\n/start\n/submit\n/help\n/usercolumns`
+    `Commands:\n\n/start\n/submit\n/help`
   );
-
-});
-
-// ======================
-// BOT USERS COLUMNS
-// ======================
-
-bot.command('usercolumns', async (ctx) => {
-
-  try {
-
-    const token = await getGraphToken();
-
-    const response = await axios.get(
-      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/columns`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    const columns = response.data.value
-      .map(col => `${col.displayName} = ${col.name}`)
-      .join('\n');
-
-    ctx.reply(columns);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    ctx.reply('❌ Could not get Bot Users columns.');
-
-  }
 
 });
 
@@ -197,9 +163,9 @@ bot.command('submit', async (ctx) => {
     step: 'd10',
     data: {},
     user: {
-      RepName: user.fields.RepName || '',
-      RepEmail: user.fields.RepEmail || '',
-      TLName: user.fields.TLName || '',
+      RepName: user.fields.LinkTitle || '',
+      RepEmail: user.fields.Email || '',
+      TLName: user.fields.TL_x002f_MangerName || '',
       MarketCity: user.fields.Market_x002f_City || ''
     }
   };
@@ -370,7 +336,7 @@ Type YES to submit or CANCEL to cancel.`
 });
 
 // ======================
-// LAUNCH
+// LAUNCH BOT
 // ======================
 
 bot.launch();
