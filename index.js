@@ -7,6 +7,10 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 
 const sessions = {};
 
+// ======================
+// MICROSOFT TOKEN
+// ======================
+
 async function getGraphToken() {
 
   const tokenResponse = await axios.post(
@@ -25,20 +29,59 @@ async function getGraphToken() {
   );
 
   return tokenResponse.data.access_token;
+
 }
 
-async function createSubmission(ctx, data) {
+// ======================
+// CHECK IF USER IS ACTIVE
+// ======================
+
+async function getBotUser(telegramId) {
+
+  const token = await getGraphToken();
+
+  const response = await axios.get(
+    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/items?expand=fields`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  const users = response.data.value;
+
+  const foundUser = users.find(
+    user =>
+      user.fields.TelegramUserID === String(telegramId)
+  );
+
+  return foundUser || null;
+
+}
+
+// ======================
+// CREATE SUBMISSION
+// ======================
+
+async function createSubmission(ctx, data, userData) {
 
   const token = await getGraphToken();
 
   const payload = {
     fields: {
 
-      Title: `Shift submission - ${ctx.from.first_name || 'Rep'}`,
+      Title: `Shift submission - ${userData.RepName}`,
 
-      RepName: ctx.from.first_name || '',
+      RepName: userData.RepName,
+
+      RepEmail: userData.RepEmail,
 
       TelegramUserID: String(ctx.from.id),
+
+      TLName: userData.TLName,
+
+      Market_x002f_City: userData.MarketCity,
 
       _x0024_10Donations: data.d10,
       _x0024_20Donations: data.d20,
@@ -62,26 +105,112 @@ async function createSubmission(ctx, data) {
       }
     }
   );
+
 }
 
-bot.start((ctx) => {
+// ======================
+// START
+// ======================
+
+bot.start(async (ctx) => {
+
+  const user = await getBotUser(ctx.from.id);
+
+  if (!user) {
+
+    return ctx.reply(
+      `❌ You are not authorized.\n\nPlease contact management and provide this Telegram ID:\n${ctx.from.id}`
+    );
+
+  }
 
   ctx.reply(
-    `Welcome ${ctx.from.first_name || 'there'}!\n\nUse /submit to submit your shift report.`
+    `Welcome ${user.fields.RepName}!\n\nUse /submit to submit your shift report.`
   );
 
 });
 
-bot.command('submit', (ctx) => {
+// ======================
+// HELP
+// ======================
+
+bot.command('help', (ctx) => {
+
+  ctx.reply(
+    `Commands:\n\n/start\n/submit\n/help\n/usercolumns`
+  );
+
+});
+
+// ======================
+// BOT USERS COLUMNS
+// ======================
+
+bot.command('usercolumns', async (ctx) => {
+
+  try {
+
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/columns`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const columns = response.data.value
+      .map(col => `${col.displayName} = ${col.name}`)
+      .join('\n');
+
+    ctx.reply(columns);
+
+  } catch (error) {
+
+    console.log(error.response?.data || error.message);
+
+    ctx.reply('❌ Could not get Bot Users columns.');
+
+  }
+
+});
+
+// ======================
+// SUBMIT
+// ======================
+
+bot.command('submit', async (ctx) => {
+
+  const user = await getBotUser(ctx.from.id);
+
+  if (!user) {
+
+    return ctx.reply(
+      '❌ You are not authorized to submit.'
+    );
+
+  }
 
   sessions[ctx.from.id] = {
     step: 'd10',
-    data: {}
+    data: {},
+    user: {
+      RepName: user.fields.RepName || '',
+      RepEmail: user.fields.RepEmail || '',
+      TLName: user.fields.TLName || '',
+      MarketCity: user.fields.Market_x002f_City || ''
+    }
   };
 
   ctx.reply('How many $10 donations did you get?');
 
 });
+
+// ======================
+// TEXT FLOW
+// ======================
 
 bot.on('text', async (ctx) => {
 
@@ -214,7 +343,8 @@ Type YES to submit or CANCEL to cancel.`
 
         await createSubmission(
           ctx,
-          session.data
+          session.data,
+          session.user
         );
 
         delete sessions[userId];
@@ -239,11 +369,19 @@ Type YES to submit or CANCEL to cancel.`
 
 });
 
+// ======================
+// LAUNCH
+// ======================
+
 bot.launch();
 
 console.log(
   'TechSid Telegram Bot is running...'
 );
+
+// ======================
+// SAFE SHUTDOWN
+// ======================
 
 process.once(
   'SIGINT',
