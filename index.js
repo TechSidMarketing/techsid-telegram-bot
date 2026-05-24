@@ -148,6 +148,30 @@ bot.command('help', (ctx) => {
   ctx.reply('Commands:\n/start\n/submit\n/help');
 });
 
+bot.command('columns', async (ctx) => {
+  try {
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/columns`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const columns = response.data.value
+      .map(col => `${col.displayName} = ${col.name}`)
+      .join('\n');
+
+    ctx.reply(columns);
+  } catch (error) {
+    console.log(error.response?.data || error.message);
+    ctx.reply('Could not get columns.');
+  }
+});
+
 bot.launch();
 
 console.log('TechSid Telegram Bot is running...');
