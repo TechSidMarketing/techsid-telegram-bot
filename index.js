@@ -20,3 +20,7 @@ bot.command('help', (ctx) => {
 bot.launch();
 
 console.log('TechSid Telegram Bot is running...');
+
+// Graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
