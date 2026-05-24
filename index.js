@@ -32,7 +32,11 @@ async function getBotUser(telegramId) {
 
   const response = await axios.get(
     `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/items?expand=fields`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
 
   return response.data.value.find(
@@ -47,7 +51,11 @@ async function getAnyBotUser(telegramId) {
 
   const response = await axios.get(
     `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/items?expand=fields`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
 
   return response.data.value.find(
@@ -58,7 +66,8 @@ async function getAnyBotUser(telegramId) {
 async function createPendingBotUser(ctx) {
   const token = await getGraphToken();
 
-  const fullName = `${ctx.from.first_name || ''} ${ctx.from.last_name || ''}`.trim();
+  const fullName =
+    `${ctx.from.first_name || ''} ${ctx.from.last_name || ''}`.trim();
 
   const payload = {
     fields: {
@@ -81,20 +90,35 @@ async function createPendingBotUser(ctx) {
 
 async function hasSubmittedToday(telegramId) {
   const token = await getGraphToken();
+
   const today = new Date();
 
-  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+  const startOfDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  ).toISOString();
+
+  const endOfDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + 1
+  ).toISOString();
 
   const response = await axios.get(
     `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
 
-  return response.data.value.some(item =>
-    item.fields.TelegramUserID === String(telegramId) &&
-    item.fields.ShiftDate >= startOfDay &&
-    item.fields.ShiftDate < endOfDay
+  return response.data.value.some(
+    item =>
+      item.fields.TelegramUserID === String(telegramId) &&
+      item.fields.ShiftDate >= startOfDay &&
+      item.fields.ShiftDate < endOfDay
   );
 }
 
@@ -148,7 +172,7 @@ bot.start(async (ctx) => {
 
   if (activeUser) {
     return ctx.reply(
-      `Welcome ${activeUser.fields.LinkTitle}!\n\nUse /submit to submit your shift report.`
+      `✅ Welcome ${activeUser.fields.LinkTitle}!\n\nUse /submit to submit your shift report.\n\nUse /help to see all commands.`
     );
   }
 
@@ -156,7 +180,7 @@ bot.start(async (ctx) => {
 
   if (existingUser) {
     return ctx.reply(
-      `⏳ Your access request is pending approval.\n\nYour Telegram ID is:\n${ctx.from.id}\n\nManagement needs to activate your profile before you can submit.`
+      `⏳ Your access request is pending approval.\n\nManagement must activate your account before you can use the bot.`
     );
   }
 
@@ -164,7 +188,7 @@ bot.start(async (ctx) => {
     await createPendingBotUser(ctx);
 
     return ctx.reply(
-      `✅ Access request submitted.\n\nYour Telegram ID is:\n${ctx.from.id}\n\nManagement will approve your access shortly.`
+      `✅ Access request submitted successfully.\n\nYour Telegram ID:\n${ctx.from.id}\n\nManagement will approve your account shortly.`
     );
   } catch (error) {
     console.log(error.response?.data || error.message);
@@ -177,14 +201,14 @@ bot.start(async (ctx) => {
 
 bot.command('help', (ctx) => {
   ctx.reply(
-`Commands:
+`📋 Commands
 
-/start
-/submit
-/mysales
-/teamtoday
-/leaderboard
-/help`
+/start - Start the bot or request access
+/submit - Submit end-of-shift report
+/mysales - View your sales today
+/teamtoday - TL only: View today's team sales
+/leaderboard - View today's leaderboard
+/help - View help menu`
   );
 });
 
@@ -192,7 +216,9 @@ bot.command('teamtoday', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
 
-    if (!user) return ctx.reply('❌ Unauthorized.');
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
 
     const userRoles = user.fields.Role || [];
 
@@ -204,19 +230,34 @@ bot.command('teamtoday', async (ctx) => {
 
     const response = await axios.get(
       `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
     );
 
     const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    ).toISOString();
+
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    ).toISOString();
 
     const tlName = cleanText(user.fields.LinkTitle);
 
-    const todaySubs = response.data.value.filter(item =>
-      cleanText(item.fields.TLName) === tlName &&
-      item.fields.ShiftDate >= startOfDay &&
-      item.fields.ShiftDate < endOfDay
+    const todaySubs = response.data.value.filter(
+      item =>
+        cleanText(item.fields.TLName) === tlName &&
+        item.fields.ShiftDate >= startOfDay &&
+        item.fields.ShiftDate < endOfDay
     );
 
     if (todaySubs.length === 0) {
@@ -224,21 +265,26 @@ bot.command('teamtoday', async (ctx) => {
     }
 
     let total = 0;
+
     let message = '📊 Team Today\n\n';
 
     todaySubs.forEach(item => {
       const rep = cleanText(item.fields.RepName) || 'Unknown Rep';
+
       const repTotal = item.fields.TotalDonations || 0;
 
       total += repTotal;
+
       message += `${rep} - ${repTotal}\n`;
     });
 
-    message += `\nTeam Total: ${total}`;
+    message += `\n🔥 Team Total: ${total}`;
 
     ctx.reply(message);
+
   } catch (error) {
     console.log(error.response?.data || error.message);
+
     ctx.reply('❌ Failed to load team report.');
   }
 });
@@ -247,22 +293,39 @@ bot.command('leaderboard', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
 
-    if (!user) return ctx.reply('❌ Unauthorized.');
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
 
     const token = await getGraphToken();
 
     const response = await axios.get(
       `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
     );
 
     const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
 
-    const todaySubs = response.data.value.filter(item =>
-      item.fields.ShiftDate >= startOfDay &&
-      item.fields.ShiftDate < endOfDay
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    ).toISOString();
+
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    ).toISOString();
+
+    const todaySubs = response.data.value.filter(
+      item =>
+        item.fields.ShiftDate >= startOfDay &&
+        item.fields.ShiftDate < endOfDay
     );
 
     if (todaySubs.length === 0) {
@@ -283,8 +346,10 @@ bot.command('leaderboard', async (ctx) => {
     });
 
     ctx.reply(message);
+
   } catch (error) {
     console.log(error.response?.data || error.message);
+
     ctx.reply('❌ Failed to load leaderboard.');
   }
 });
@@ -293,23 +358,40 @@ bot.command('mysales', async (ctx) => {
   try {
     const user = await getBotUser(ctx.from.id);
 
-    if (!user) return ctx.reply('❌ Unauthorized.');
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
 
     const token = await getGraphToken();
 
     const response = await axios.get(
       `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
     );
 
     const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
 
-    const mySubmissions = response.data.value.filter(item =>
-      item.fields.TelegramUserID === String(ctx.from.id) &&
-      item.fields.ShiftDate >= startOfDay &&
-      item.fields.ShiftDate < endOfDay
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    ).toISOString();
+
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    ).toISOString();
+
+    const mySubmissions = response.data.value.filter(
+      item =>
+        item.fields.TelegramUserID === String(ctx.from.id) &&
+        item.fields.ShiftDate >= startOfDay &&
+        item.fields.ShiftDate < endOfDay
     );
 
     if (mySubmissions.length === 0) {
@@ -336,13 +418,15 @@ $30: ${item._x0024_30Donations || 0}
 $35: ${item._x0024_35Donations || 0}
 $40: ${item._x0024_40Donations || 0}
 
-Total Donations: ${item.TotalDonations || actualTotal}
+🔥 Total Donations: ${item.TotalDonations || actualTotal}
 
-Status: ${item.Status || 'Submitted'}`;
+📌 Status: ${item.Status || 'Submitted'}`;
 
     ctx.reply(message);
+
   } catch (error) {
     console.log(error.response?.data || error.message);
+
     ctx.reply('❌ Failed to load your sales.');
   }
 });
@@ -376,6 +460,7 @@ bot.command('submit', async (ctx) => {
 
 bot.on('text', async (ctx) => {
   const userId = ctx.from.id;
+
   const text = ctx.message.text.trim();
 
   if (text.startsWith('/')) return;
@@ -386,11 +471,13 @@ bot.on('text', async (ctx) => {
 
   if (text.toLowerCase() === 'cancel') {
     delete sessions[userId];
+
     return ctx.reply('❌ Submission cancelled.');
   }
 
-  const askNumber = (value) => {
+  const askNumber = value => {
     const num = Number(value);
+
     return Number.isInteger(num) && num >= 0 ? num : null;
   };
 
@@ -398,37 +485,66 @@ bot.on('text', async (ctx) => {
     switch (session.step) {
       case 'd10':
         session.data.d10 = askNumber(text);
-        if (session.data.d10 === null) return ctx.reply('Please enter a valid number.');
+
+        if (session.data.d10 === null) {
+          return ctx.reply('Please enter a valid number.');
+        }
+
         session.step = 'd20';
+
         return ctx.reply('How many $20 donations did you get?');
 
       case 'd20':
         session.data.d20 = askNumber(text);
-        if (session.data.d20 === null) return ctx.reply('Please enter a valid number.');
+
+        if (session.data.d20 === null) {
+          return ctx.reply('Please enter a valid number.');
+        }
+
         session.step = 'd25';
+
         return ctx.reply('How many $25 donations did you get?');
 
       case 'd25':
         session.data.d25 = askNumber(text);
-        if (session.data.d25 === null) return ctx.reply('Please enter a valid number.');
+
+        if (session.data.d25 === null) {
+          return ctx.reply('Please enter a valid number.');
+        }
+
         session.step = 'd30';
+
         return ctx.reply('How many $30 donations did you get?');
 
       case 'd30':
         session.data.d30 = askNumber(text);
-        if (session.data.d30 === null) return ctx.reply('Please enter a valid number.');
+
+        if (session.data.d30 === null) {
+          return ctx.reply('Please enter a valid number.');
+        }
+
         session.step = 'd35';
+
         return ctx.reply('How many $35 donations did you get?');
 
       case 'd35':
         session.data.d35 = askNumber(text);
-        if (session.data.d35 === null) return ctx.reply('Please enter a valid number.');
+
+        if (session.data.d35 === null) {
+          return ctx.reply('Please enter a valid number.');
+        }
+
         session.step = 'd40';
+
         return ctx.reply('How many $40 donations did you get?');
 
       case 'd40':
         session.data.d40 = askNumber(text);
-        if (session.data.d40 === null) return ctx.reply('Please enter a valid number.');
+
+        if (session.data.d40 === null) {
+          return ctx.reply('Please enter a valid number.');
+        }
+
         session.step = 'confirm';
 
         return ctx.reply(
@@ -441,7 +557,7 @@ $30: ${session.data.d30}
 $35: ${session.data.d35}
 $40: ${session.data.d40}
 
-Total Donations: ${
+🔥 Total Donations: ${
   session.data.d10 +
   session.data.d20 +
   session.data.d25 +
@@ -455,18 +571,29 @@ Type YES to submit or CANCEL to cancel.`
 
       case 'confirm':
         if (text.toLowerCase() !== 'yes') {
-          return ctx.reply('Type YES to submit or CANCEL to cancel.');
+          return ctx.reply(
+            'Type YES to submit or CANCEL to cancel.'
+          );
         }
 
-        await createSubmission(ctx, session.data, session.user);
+        await createSubmission(
+          ctx,
+          session.data,
+          session.user
+        );
 
         delete sessions[userId];
 
-        return ctx.reply('✅ End-of-shift submission saved successfully.');
+        return ctx.reply(
+          '✅ End-of-shift submission saved successfully.'
+        );
     }
   } catch (error) {
     console.log(error.response?.data || error.message);
-    return ctx.reply('❌ Submission failed. Please contact management.');
+
+    return ctx.reply(
+      '❌ Submission failed. Please contact management.'
+    );
   }
 });
 
