@@ -40,6 +40,14 @@ function cleanText(value) {
   return String(value);
 }
 
+function normalize(value) {
+
+  return cleanText(value)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 async function getBotUser(telegramId) {
 
   const token = await getGraphToken();
@@ -323,7 +331,7 @@ bot.command('mytablet', async (ctx) => {
       return ctx.reply('❌ Unauthorized.');
     }
 
-    const repName = cleanText(user.fields.LinkTitle);
+    const repName = normalize(user.fields.LinkTitle);
 
     const token = await getGraphToken();
 
@@ -338,15 +346,13 @@ bot.command('mytablet', async (ctx) => {
 
     const tablet = response.data.value.find(item => {
 
-      const holder = cleanText(item.fields.CurrentHolder)
-        .trim()
-        .toLowerCase();
+      const holder = normalize(item.fields.CurrentHolder);
 
-      const rep = repName
-        .trim()
-        .toLowerCase();
-
-      return holder === rep;
+      return (
+        holder === repName ||
+        holder.includes(repName) ||
+        repName.includes(holder)
+      );
     });
 
     if (!tablet) {
