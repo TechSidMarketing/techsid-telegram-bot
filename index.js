@@ -20,6 +20,27 @@ async function getGraphToken() {
   return tokenResponse.data.access_token;
 }
 
+async function createTestSubmission(ctx) {
+  const token = await getGraphToken();
+
+  const payload = {
+    fields: {
+      Title: `Test submission from ${ctx.from.first_name || 'Telegram User'}`
+    }
+  };
+
+  await axios.post(
+    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items`,
+    payload,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+}
+
 bot.start((ctx) => {
   const firstName = ctx.from.first_name || 'there';
   const userId = ctx.from.id;
@@ -39,43 +60,18 @@ bot.command('microsoft', async (ctx) => {
   }
 });
 
-bot.command('findlists', async (ctx) => {
+bot.command('testsubmission', async (ctx) => {
   try {
-    const token = await getGraphToken();
-
-    const siteResponse = await axios.get(
-      'https://graph.microsoft.com/v1.0/sites/techsidmktg-my.sharepoint.com:/personal/khawar_siddiqui_techsidmktg_com',
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    const siteId = siteResponse.data.id;
-
-    const listsResponse = await axios.get(
-      `https://graph.microsoft.com/v1.0/sites/${siteId}/lists`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    const lists = listsResponse.data.value
-      .map((list) => `${list.displayName} = ${list.id}`)
-      .join('\n\n');
-
-    ctx.reply(`✅ Site ID:\n${siteId}\n\n✅ Lists Found:\n${lists}`);
+    await createTestSubmission(ctx);
+    ctx.reply('✅ Test submission created in Microsoft List.');
   } catch (error) {
     console.log(error.response?.data || error.message);
-    ctx.reply('❌ Could not find SharePoint lists. Check permissions or site URL.');
+    ctx.reply('❌ Test submission failed. Check Railway logs.');
   }
 });
 
 bot.command('help', (ctx) => {
-  ctx.reply('Commands:\n/start\n/microsoft\n/findlists');
+  ctx.reply('Commands:\n/start\n/microsoft\n/testsubmission');
 });
 
 bot.launch();
