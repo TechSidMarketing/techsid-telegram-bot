@@ -4,9 +4,11 @@ const { Telegraf } = require('telegraf');
 const axios = require('axios');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
+
 const sessions = {};
 
 async function getGraphToken() {
+
   const tokenResponse = await axios.post(
     `https://login.microsoftonline.com/${process.env.TENANT_ID}/oauth2/v2.0/token`,
     new URLSearchParams({
@@ -26,12 +28,20 @@ async function getGraphToken() {
 }
 
 function cleanText(value) {
-  if (Array.isArray(value)) return value.join(', ');
-  if (value === null || value === undefined) return '';
+
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+
+  if (value === null || value === undefined) {
+    return '';
+  }
+
   return String(value);
 }
 
 async function getBotUser(telegramId) {
+
   const token = await getGraphToken();
 
   const response = await axios.get(
@@ -51,6 +61,7 @@ async function getBotUser(telegramId) {
 }
 
 async function getAnyBotUser(telegramId) {
+
   const token = await getGraphToken();
 
   const response = await axios.get(
@@ -63,11 +74,13 @@ async function getAnyBotUser(telegramId) {
   );
 
   return response.data.value.find(
-    user => user.fields.TelegramUserID === String(telegramId)
+    user =>
+      user.fields.TelegramUserID === String(telegramId)
   ) || null;
 }
 
 async function createPendingBotUser(ctx) {
+
   const token = await getGraphToken();
 
   const fullName =
@@ -93,6 +106,7 @@ async function createPendingBotUser(ctx) {
 }
 
 async function hasSubmittedToday(telegramId) {
+
   const token = await getGraphToken();
 
   const today = new Date();
@@ -127,6 +141,7 @@ async function hasSubmittedToday(telegramId) {
 }
 
 async function createSubmission(ctx, data, userData) {
+
   const token = await getGraphToken();
 
   const totalDonations =
@@ -172,44 +187,66 @@ async function createSubmission(ctx, data, userData) {
 }
 
 bot.start(async (ctx) => {
+
   const activeUser = await getBotUser(ctx.from.id);
 
   if (activeUser) {
+
     return ctx.reply(
-      `✅ Welcome ${activeUser.fields.LinkTitle}!\n\nUse /submit to submit your shift report.\n\nUse /help to see all commands.`
+`✅ Welcome ${activeUser.fields.LinkTitle}!
+
+Use /submit to submit your shift report.
+
+Use /help to see all commands.`
     );
   }
 
   const existingUser = await getAnyBotUser(ctx.from.id);
 
   if (existingUser) {
+
     return ctx.reply(
-      `⏳ Your access request is pending approval.\n\nManagement must activate your account before you can use the bot.`
+`⏳ Your access request is pending approval.
+
+Management must activate your account before you can use the bot.`
     );
   }
 
   try {
+
     await createPendingBotUser(ctx);
 
     return ctx.reply(
-      `✅ Access request submitted successfully.\n\nYour Telegram ID:\n${ctx.from.id}\n\nManagement will approve your account shortly.`
+`✅ Access request submitted successfully.
+
+Your Telegram ID:
+${ctx.from.id}
+
+Management will approve your account shortly.`
     );
+
   } catch (error) {
+
     console.log(error.response?.data || error.message);
 
     return ctx.reply(
-      `❌ Could not submit access request.\n\nPlease contact management and provide this Telegram ID:\n${ctx.from.id}`
+`❌ Could not submit access request.
+
+Please contact management and provide this Telegram ID:
+${ctx.from.id}`
     );
   }
 });
 
 bot.command('help', (ctx) => {
+
   ctx.reply(
 `📋 Commands
 
 /start - Start the bot or request access
 /submit - Submit end-of-shift report
 /mysales - View your sales today
+/mytablet - View assigned tablet
 /teamtoday - TL only: View today's team sales
 /leaderboard - View today's leaderboard
 /findlists - Show Microsoft Lists
@@ -219,7 +256,9 @@ bot.command('help', (ctx) => {
 });
 
 bot.command('findlists', async (ctx) => {
+
   try {
+
     const token = await getGraphToken();
 
     const response = await axios.get(
@@ -238,6 +277,7 @@ bot.command('findlists', async (ctx) => {
     ctx.reply(lists);
 
   } catch (error) {
+
     console.log(error.response?.data || error.message);
 
     ctx.reply('❌ Could not find lists.');
@@ -245,7 +285,9 @@ bot.command('findlists', async (ctx) => {
 });
 
 bot.command('tabletcolumns', async (ctx) => {
+
   try {
+
     const token = await getGraphToken();
 
     const response = await axios.get(
@@ -264,14 +306,87 @@ bot.command('tabletcolumns', async (ctx) => {
     ctx.reply(columns);
 
   } catch (error) {
+
     console.log(error.response?.data || error.message);
 
     ctx.reply('❌ Could not get tablet columns.');
   }
 });
 
-bot.command('teamtoday', async (ctx) => {
+bot.command('mytablet', async (ctx) => {
+
   try {
+
+    const user = await getBotUser(ctx.from.id);
+
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
+
+    const repName = cleanText(user.fields.LinkTitle);
+
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.TABLET_INVENTORY_LIST_ID}/items?expand=fields`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const tablet = response.data.value.find(item =>
+      cleanText(item.fields.CurrentHolder)
+        .toLowerCase()
+        .includes(repName.toLowerCase())
+    );
+
+    if (!tablet) {
+      return ctx.reply('📱 No tablet assigned to you.');
+    }
+
+    const fields = tablet.fields;
+
+    const message =
+`📱 My Assigned Tablet
+
+Tablet ID: ${cleanText(fields.LinkTitle)}
+
+Serial Number: ${cleanText(fields.SerialNumber)}
+
+Status: ${cleanText(fields.Status)}
+
+Condition: ${cleanText(fields.Condition)}
+
+Accessories: ${cleanText(fields.Accessories)}
+
+Manager: ${cleanText(fields.Manager)}
+
+Market: ${cleanText(fields.Market)}
+
+Lead Accepted: ${fields.LeadAccepted ? 'Yes' : 'No'}
+
+Transfer Date: ${cleanText(fields.TransferDate)}
+
+Power On: ${fields.PowerOn ? 'Yes' : 'No'}
+
+Last Action By: ${cleanText(fields.LastActionBy)}`;
+
+    ctx.reply(message);
+
+  } catch (error) {
+
+    console.log(error.response?.data || error.message);
+
+    ctx.reply('❌ Failed to load tablet details.');
+  }
+});
+
+bot.command('teamtoday', async (ctx) => {
+
+  try {
+
     const user = await getBotUser(ctx.from.id);
 
     if (!user) {
@@ -327,6 +442,7 @@ bot.command('teamtoday', async (ctx) => {
     let message = '📊 Team Today\n\n';
 
     todaySubs.forEach(item => {
+
       const rep = cleanText(item.fields.RepName) || 'Unknown Rep';
 
       const repTotal = item.fields.TotalDonations || 0;
@@ -341,6 +457,7 @@ bot.command('teamtoday', async (ctx) => {
     ctx.reply(message);
 
   } catch (error) {
+
     console.log(error.response?.data || error.message);
 
     ctx.reply('❌ Failed to load team report.');
@@ -348,7 +465,9 @@ bot.command('teamtoday', async (ctx) => {
 });
 
 bot.command('leaderboard', async (ctx) => {
+
   try {
+
     const user = await getBotUser(ctx.from.id);
 
     if (!user) {
@@ -406,6 +525,7 @@ bot.command('leaderboard', async (ctx) => {
     ctx.reply(message);
 
   } catch (error) {
+
     console.log(error.response?.data || error.message);
 
     ctx.reply('❌ Failed to load leaderboard.');
@@ -413,7 +533,9 @@ bot.command('leaderboard', async (ctx) => {
 });
 
 bot.command('mysales', async (ctx) => {
+
   try {
+
     const user = await getBotUser(ctx.from.id);
 
     if (!user) {
@@ -483,6 +605,7 @@ $40: ${item._x0024_40Donations || 0}
     ctx.reply(message);
 
   } catch (error) {
+
     console.log(error.response?.data || error.message);
 
     ctx.reply('❌ Failed to load your sales.');
@@ -490,6 +613,7 @@ $40: ${item._x0024_40Donations || 0}
 });
 
 bot.command('submit', async (ctx) => {
+
   const user = await getBotUser(ctx.from.id);
 
   if (!user) {
@@ -517,23 +641,30 @@ bot.command('submit', async (ctx) => {
 });
 
 bot.on('text', async (ctx) => {
+
   const userId = ctx.from.id;
 
   const text = ctx.message.text.trim();
 
-  if (text.startsWith('/')) return;
+  if (text.startsWith('/')) {
+    return;
+  }
 
   const session = sessions[userId];
 
-  if (!session) return;
+  if (!session) {
+    return;
+  }
 
   if (text.toLowerCase() === 'cancel') {
+
     delete sessions[userId];
 
     return ctx.reply('❌ Submission cancelled.');
   }
 
   const askNumber = value => {
+
     const num = Number(value);
 
     return Number.isInteger(num) && num >= 0
@@ -542,8 +673,11 @@ bot.on('text', async (ctx) => {
   };
 
   try {
+
     switch (session.step) {
+
       case 'd10':
+
         session.data.d10 = askNumber(text);
 
         if (session.data.d10 === null) {
@@ -555,6 +689,7 @@ bot.on('text', async (ctx) => {
         return ctx.reply('How many $20 donations did you get?');
 
       case 'd20':
+
         session.data.d20 = askNumber(text);
 
         if (session.data.d20 === null) {
@@ -566,6 +701,7 @@ bot.on('text', async (ctx) => {
         return ctx.reply('How many $25 donations did you get?');
 
       case 'd25':
+
         session.data.d25 = askNumber(text);
 
         if (session.data.d25 === null) {
@@ -577,6 +713,7 @@ bot.on('text', async (ctx) => {
         return ctx.reply('How many $30 donations did you get?');
 
       case 'd30':
+
         session.data.d30 = askNumber(text);
 
         if (session.data.d30 === null) {
@@ -588,6 +725,7 @@ bot.on('text', async (ctx) => {
         return ctx.reply('How many $35 donations did you get?');
 
       case 'd35':
+
         session.data.d35 = askNumber(text);
 
         if (session.data.d35 === null) {
@@ -599,6 +737,7 @@ bot.on('text', async (ctx) => {
         return ctx.reply('How many $40 donations did you get?');
 
       case 'd40':
+
         session.data.d40 = askNumber(text);
 
         if (session.data.d40 === null) {
@@ -630,6 +769,7 @@ Type YES to submit or CANCEL to cancel.`
         );
 
       case 'confirm':
+
         if (text.toLowerCase() !== 'yes') {
           return ctx.reply(
             'Type YES to submit or CANCEL to cancel.'
@@ -648,7 +788,9 @@ Type YES to submit or CANCEL to cancel.`
           '✅ End-of-shift submission saved successfully.'
         );
     }
+
   } catch (error) {
+
     console.log(error.response?.data || error.message);
 
     return ctx.reply(
