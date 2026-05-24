@@ -36,22 +36,24 @@ async function createSubmission(ctx, data) {
 
   const payload = {
     fields: {
+
       Title: `Shift submission - ${ctx.from.first_name || 'Rep'}`,
 
       RepName: ctx.from.first_name || '',
 
       TelegramUserID: String(ctx.from.id),
 
-      Donations10: data.d10,
-      Donations20: data.d20,
-      Donations25: data.d25,
-      Donations30: data.d30,
-      Donations35: data.d35,
-      Donations40: data.d40,
+      _x0024_10Donations: data.d10,
+      _x0024_20Donations: data.d20,
+      _x0024_25Donations: data.d25,
+      _x0024_30Donations: data.d30,
+      _x0024_35Donations: data.d35,
+      _x0024_40Donations: data.d40,
 
       Notes: data.notes,
 
       Status: 'Submitted'
+
     }
   };
 
