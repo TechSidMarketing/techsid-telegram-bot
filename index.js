@@ -108,6 +108,14 @@ async function createSubmission(ctx, data, userData) {
 
   const token = await getGraphToken();
 
+  const totalDonations =
+    data.d10 +
+    data.d20 +
+    data.d25 +
+    data.d30 +
+    data.d35 +
+    data.d40;
+
   const payload = {
     fields: {
 
@@ -131,6 +139,8 @@ async function createSubmission(ctx, data, userData) {
       _x0024_30Donations: data.d30,
       _x0024_35Donations: data.d35,
       _x0024_40Donations: data.d40,
+
+      TotalDonations: totalDonations,
 
       Status: 'Submitted'
 
@@ -179,12 +189,105 @@ bot.start(async (ctx) => {
 bot.command('help', (ctx) => {
 
   ctx.reply(
-    `Commands:
+`Commands:
 
 /start
 /submit
+/teamtoday
 /help`
   );
+
+});
+
+// ======================
+// TEAM TODAY
+// ======================
+
+bot.command('teamtoday', async (ctx) => {
+
+  try {
+
+    const user = await getBotUser(ctx.from.id);
+
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
+
+    if (user.fields.Role !== 'TL') {
+      return ctx.reply('❌ Only Team Leads can use this command.');
+    }
+
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items?expand=fields`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const submissions = response.data.value;
+
+    const today = new Date();
+
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    ).toISOString();
+
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    ).toISOString();
+
+    const tlName = user.fields.LinkTitle;
+
+    const todaySubs = submissions.filter(item => {
+
+      return (
+        item.fields.TLName === tlName &&
+        item.fields.ShiftDate >= startOfDay &&
+        item.fields.ShiftDate < endOfDay
+      );
+
+    });
+
+    if (todaySubs.length === 0) {
+      return ctx.reply('No team submissions today.');
+    }
+
+    let total = 0;
+
+    let message = '📊 Team Today\n\n';
+
+    todaySubs.forEach(item => {
+
+      const rep = item.fields.RepName;
+
+      const repTotal =
+        item.fields.TotalDonations || 0;
+
+      total += repTotal;
+
+      message += `${rep} - ${repTotal}\n`;
+
+    });
+
+    message += `\nTeam Total: ${total}`;
+
+    ctx.reply(message);
+
+  } catch (error) {
+
+    console.log(error.response?.data || error.message);
+
+    ctx.reply('❌ Failed to load team report.');
+
+  }
 
 });
 
@@ -346,6 +449,15 @@ $25: ${session.data.d25}
 $30: ${session.data.d30}
 $35: ${session.data.d35}
 $40: ${session.data.d40}
+
+Total Donations: ${
+  session.data.d10 +
+  session.data.d20 +
+  session.data.d25 +
+  session.data.d30 +
+  session.data.d35 +
+  session.data.d40
+}
 
 Type YES to submit or CANCEL to cancel.`
         );
