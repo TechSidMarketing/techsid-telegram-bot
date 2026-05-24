@@ -336,11 +336,18 @@ bot.command('mytablet', async (ctx) => {
       }
     );
 
-    const tablet = response.data.value.find(item =>
-      cleanText(item.fields.CurrentHolder)
-        .toLowerCase()
-        .includes(repName.toLowerCase())
-    );
+    const tablet = response.data.value.find(item => {
+
+      const holder = cleanText(item.fields.CurrentHolder)
+        .trim()
+        .toLowerCase();
+
+      const rep = repName
+        .trim()
+        .toLowerCase();
+
+      return holder === rep;
+    });
 
     if (!tablet) {
       return ctx.reply('📱 No tablet assigned to you.');
