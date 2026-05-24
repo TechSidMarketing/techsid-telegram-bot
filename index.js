@@ -63,12 +63,7 @@ async function createPendingBotUser(ctx) {
   const payload = {
     fields: {
       Title: fullName || ctx.from.username || 'Pending User',
-      Email: '',
-      TelegramUserID: String(ctx.from.id),
-      Role: ['Rep'],
-      TL_x002f_MangerName: '',
-      Market_x002f_City: '',
-      Active: false
+      TelegramUserID: String(ctx.from.id)
     }
   };
 
@@ -323,6 +318,14 @@ bot.command('mysales', async (ctx) => {
 
     const item = mySubmissions[0].fields;
 
+    const actualTotal =
+      (item._x0024_10Donations || 0) +
+      (item._x0024_20Donations || 0) +
+      (item._x0024_25Donations || 0) +
+      (item._x0024_30Donations || 0) +
+      (item._x0024_35Donations || 0) +
+      (item._x0024_40Donations || 0);
+
     const message =
 `📊 My Sales Today
 
@@ -333,7 +336,7 @@ $30: ${item._x0024_30Donations || 0}
 $35: ${item._x0024_35Donations || 0}
 $40: ${item._x0024_40Donations || 0}
 
-Total Donations: ${item.TotalDonations || 0}
+Total Donations: ${item.TotalDonations || actualTotal}
 
 Status: ${item.Status || 'Submitted'}`;
 
