@@ -637,7 +637,7 @@ TL`
 
         if (!assigneeUser) {
           return ctx.reply(
-            '❌ User not found in Bot Users. Please check the spelling.'
+            '❌ User not found. Please check the spelling.'
           );
         }
 
