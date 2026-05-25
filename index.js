@@ -469,142 +469,6 @@ bot.command('help', (ctx) => {
 });
 
 // ======================
-// SALES COMMANDS
-// ======================
-
-bot.command('submit', async (ctx) => {
-
-  try {
-
-    const user =
-      await getBotUser(ctx.from.id);
-
-    if (!user) {
-      return ctx.reply(
-        '❌ Unauthorized.'
-      );
-    }
-
-    const alreadySubmitted =
-      await hasSubmittedToday(ctx.from.id);
-
-    if (alreadySubmitted) {
-
-      return ctx.reply(
-        '❌ You have already submitted your shift report today.'
-      );
-    }
-
-    sessions[ctx.from.id] = {
-
-      type: 'submitSales',
-
-      step: 'd10',
-
-      data: {},
-
-      user: {
-
-        RepName:
-          user.fields.Title ||
-          user.fields.LinkTitle ||
-          '',
-
-        RepEmail:
-          user.fields.Email || '',
-
-        TLName:
-          user.fields.TL_x002f_MangerName || '',
-
-        MarketCity:
-          user.fields.Market_x002f_City || ''
-      }
-    };
-
-    ctx.reply(
-      'How many $10 donations did you get?'
-    );
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    ctx.reply(
-      '❌ Could not start submission.'
-    );
-  }
-});
-
-bot.command('mysales', async (ctx) => {
-
-  try {
-
-    const user =
-      await getBotUser(ctx.from.id);
-
-    if (!user) {
-      return ctx.reply(
-        '❌ Unauthorized.'
-      );
-    }
-
-    const { startOfDay, endOfDay } =
-      getTodayRange();
-
-    const submissions =
-      await getListItems(
-        process.env.REP_SUBMISSIONS_LIST_ID
-      );
-
-    const mySubmissions =
-      submissions.filter(item => {
-
-        return (
-          cleanText(item.fields.TelegramUserID) === String(ctx.from.id) &&
-          item.fields.ShiftDate >= startOfDay &&
-          item.fields.ShiftDate < endOfDay
-        );
-
-      });
-
-    if (mySubmissions.length === 0) {
-
-      return ctx.reply(
-        'You have not submitted any sales today yet.'
-      );
-    }
-
-    const item =
-      mySubmissions[0].fields;
-
-    ctx.reply(
-`📊 My Sales Today
-
-$10: ${item._x0024_10Donations || 0}
-$20: ${item._x0024_20Donations || 0}
-$25: ${item._x0024_25Donations || 0}
-$30: ${item._x0024_30Donations || 0}
-$35: ${item._x0024_35Donations || 0}
-$40: ${item._x0024_40Donations || 0}
-
-🔥 Total Donations:
-${item.TotalDonations || 0}
-
-📌 Status:
-${item.Status || 'Submitted'}`
-    );
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    ctx.reply(
-      '❌ Failed to load your sales.'
-    );
-  }
-});
-
-// ======================
 // LEADERBOARD
 // ======================
 
@@ -973,28 +837,36 @@ bot.command('accepttablet', async (ctx) => {
       );
     }
 
-    const tablet = pendingTablets[0];
+    if (pendingTablets.length === 1) {
 
-    sessions[ctx.from.id] = {
+      const tablet = pendingTablets[0];
 
-      type: 'acceptTablet',
+      sessions[ctx.from.id] = {
 
-      step: 'condition',
+        type: 'acceptTablet',
 
-      tabletItemId:
-        tablet.id,
+        step: 'condition',
 
-      tabletId:
-        cleanText(tablet.fields.LinkTitle),
+        tabletItemId:
+          tablet.id,
 
-      data: {}
-    };
+        tabletId:
+          cleanText(tablet.fields.LinkTitle),
 
-    ctx.reply(
+        data: {}
+      };
+
+      return ctx.reply(
 `📱 Accept Tablet
 
 Tablet ID:
 ${cleanText(tablet.fields.LinkTitle)}
+
+Current Condition:
+${cleanText(tablet.fields.Condition)}
+
+Accessories:
+${cleanText(tablet.fields.Accessories)}
 
 Is the tablet condition acceptable?
 
@@ -1002,7 +874,46 @@ Reply:
 YES
 or
 NO`
-    );
+      );
+    }
+
+    sessions[ctx.from.id] = {
+
+      type: 'acceptTablet',
+
+      step: 'selectTablet',
+
+      pendingTablets,
+
+      data: {}
+    };
+
+    let message =
+`📱 Pending Tablets (${pendingTablets.length})
+
+`;
+
+    pendingTablets.forEach((tablet, index) => {
+
+      const f = tablet.fields;
+
+      message +=
+`${index + 1}. Tablet ID: ${cleanText(f.LinkTitle)}
+
+Condition: ${cleanText(f.Condition)}
+
+Accessories: ${cleanText(f.Accessories)}
+
+Power On: ${f.PowerOn ? 'Yes' : 'No'}
+
+`;
+
+    });
+
+    message +=
+'Reply with the Tablet ID you want to accept.';
+
+    return ctx.reply(message);
 
   } catch (error) {
 
@@ -1190,11 +1101,55 @@ or CANCEL to cancel.`
       }
     }
 
-    // ======================
+      // ======================
     // ACCEPT TABLET FLOW
     // ======================
 
     if (session.type === 'acceptTablet') {
+
+      if (session.step === 'selectTablet') {
+
+        const selectedTablet =
+          session.pendingTablets.find(tablet =>
+            normalize(tablet.fields.LinkTitle) === normalize(text)
+          );
+
+        if (!selectedTablet) {
+
+          return ctx.reply(
+            '❌ Tablet not found. Please enter a valid Tablet ID from the list.'
+          );
+        }
+
+        session.tabletItemId =
+          selectedTablet.id;
+
+        session.tabletId =
+          cleanText(selectedTablet.fields.LinkTitle);
+
+        session.step =
+          'condition';
+
+        return ctx.reply(
+`📱 Accept Tablet
+
+Tablet ID:
+${cleanText(selectedTablet.fields.LinkTitle)}
+
+Current Condition:
+${cleanText(selectedTablet.fields.Condition)}
+
+Accessories:
+${cleanText(selectedTablet.fields.Accessories)}
+
+Is the tablet condition acceptable?
+
+Reply:
+YES
+or
+NO`
+        );
+      }
 
       if (session.step === 'condition') {
 
@@ -1203,7 +1158,8 @@ or CANCEL to cancel.`
             ? 'Accepted'
             : 'Issue Reported';
 
-        session.step = 'chargingCable';
+        session.step =
+          'chargingCable';
 
         return ctx.reply(
 `Was the charging cable provided?
@@ -1222,7 +1178,8 @@ NO`
             ? 'Yes'
             : 'No';
 
-        session.step = 'chargingBlock';
+        session.step =
+          'chargingBlock';
 
         return ctx.reply(
 `Was the charging block provided?
@@ -1241,7 +1198,8 @@ NO`
             ? 'Yes'
             : 'No';
 
-        session.step = 'powerOn';
+        session.step =
+          'powerOn';
 
         return ctx.reply(
 `Does the tablet power on?
@@ -1258,7 +1216,8 @@ NO`
         session.data.powerOn =
           text.toUpperCase() === 'YES';
 
-        session.step = 'notes';
+        session.step =
+          'notes';
 
         return ctx.reply(
 `Any notes?
@@ -1275,7 +1234,8 @@ NONE`
             ? ''
             : text;
 
-        session.step = 'confirm';
+        session.step =
+          'confirm';
 
         return ctx.reply(
 `Confirm tablet acceptance?
@@ -1305,9 +1265,7 @@ or CANCEL to cancel.`
 
       if (session.step === 'confirm') {
 
-        if (
-          text.toLowerCase() !== 'yes'
-        ) {
+        if (text.toLowerCase() !== 'yes') {
 
           return ctx.reply(
             'Type YES to confirm or CANCEL to cancel.'
@@ -1369,7 +1327,8 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step = 'd20';
+          session.step =
+            'd20';
 
           return ctx.reply(
             'How many $20 donations did you get?'
@@ -1387,7 +1346,8 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step = 'd25';
+          session.step =
+            'd25';
 
           return ctx.reply(
             'How many $25 donations did you get?'
@@ -1405,7 +1365,8 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step = 'd30';
+          session.step =
+            'd30';
 
           return ctx.reply(
             'How many $30 donations did you get?'
@@ -1423,7 +1384,8 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step = 'd35';
+          session.step =
+            'd35';
 
           return ctx.reply(
             'How many $35 donations did you get?'
@@ -1441,7 +1403,8 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step = 'd40';
+          session.step =
+            'd40';
 
           return ctx.reply(
             'How many $40 donations did you get?'
@@ -1459,7 +1422,8 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step = 'confirm';
+          session.step =
+            'confirm';
 
           return ctx.reply(
 `Confirm submission:
@@ -1487,9 +1451,7 @@ or CANCEL to cancel.`
 
         case 'confirm':
 
-          if (
-            text.toLowerCase() !== 'yes'
-          ) {
+          if (text.toLowerCase() !== 'yes') {
 
             return ctx.reply(
               'Type YES to submit or CANCEL to cancel.'
@@ -1512,7 +1474,9 @@ or CANCEL to cancel.`
 
   } catch (error) {
 
-    console.log(error.response?.data || error.message);
+    console.log(
+      error.response?.data || error.message
+    );
 
     return ctx.reply(
       '❌ Action failed. Please contact management.'
