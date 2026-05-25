@@ -469,6 +469,148 @@ bot.command('help', (ctx) => {
 });
 
 // ======================
+// SALES COMMANDS
+// ======================
+
+bot.command('submit', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+
+      return ctx.reply(
+        '❌ Unauthorized.'
+      );
+    }
+
+    const alreadySubmitted =
+      await hasSubmittedToday(ctx.from.id);
+
+    if (alreadySubmitted) {
+
+      return ctx.reply(
+        '❌ You have already submitted your shift report today.'
+      );
+    }
+
+    sessions[ctx.from.id] = {
+
+      type: 'submitSales',
+
+      step: 'd10',
+
+      data: {},
+
+      user: {
+
+        RepName:
+          user.fields.Title ||
+          user.fields.LinkTitle ||
+          '',
+
+        RepEmail:
+          user.fields.Email || '',
+
+        TLName:
+          user.fields.TL_x002f_MangerName || '',
+
+        MarketCity:
+          user.fields.Market_x002f_City || ''
+      }
+    };
+
+    ctx.reply(
+      'How many $10 donations did you get?'
+    );
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data || error.message
+    );
+
+    ctx.reply(
+      '❌ Could not start submission.'
+    );
+  }
+});
+
+bot.command('mysales', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+
+      return ctx.reply(
+        '❌ Unauthorized.'
+      );
+    }
+
+    const { startOfDay, endOfDay } =
+      getTodayRange();
+
+    const submissions =
+      await getListItems(
+        process.env.REP_SUBMISSIONS_LIST_ID
+      );
+
+    const mySubmissions =
+      submissions.filter(item => {
+
+        return (
+          cleanText(item.fields.TelegramUserID) === String(ctx.from.id) &&
+          item.fields.ShiftDate >= startOfDay &&
+          item.fields.ShiftDate < endOfDay
+        );
+
+      });
+
+    if (mySubmissions.length === 0) {
+
+      return ctx.reply(
+        'You have not submitted any sales today yet.'
+      );
+    }
+
+    const item =
+      mySubmissions[0].fields;
+
+    ctx.reply(
+`📊 My Sales Today
+
+$10: ${item._x0024_10Donations || 0}
+$20: ${item._x0024_20Donations || 0}
+$25: ${item._x0024_25Donations || 0}
+$30: ${item._x0024_30Donations || 0}
+$35: ${item._x0024_35Donations || 0}
+$40: ${item._x0024_40Donations || 0}
+
+🔥 Total Donations:
+${item.TotalDonations || 0}
+
+📌 Status:
+${item.Status || 'Submitted'}`
+    );
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data || error.message
+    );
+
+    ctx.reply(
+      '❌ Failed to load your sales.'
+    );
+  }
+});
+
+// ======================
 // LEADERBOARD
 // ======================
 
