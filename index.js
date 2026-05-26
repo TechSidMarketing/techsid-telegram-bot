@@ -4,31 +4,19 @@ const { Telegraf } = require('telegraf');
 const axios = require('axios');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
+
 const sessions = {};
+
+// ======================
+// CONFIG
+// ======================
+
+const EMPLOYEE_ID_FIELD =
+  process.env.EMPLOYEE_ID_FIELD || 'EmployeeID';
 
 // ======================
 // HELPERS
 // ======================
-
-async function getGraphToken() {
-
-  const response = await axios.post(
-    `https://login.microsoftonline.com/${process.env.TENANT_ID}/oauth2/v2.0/token`,
-    new URLSearchParams({
-      client_id: process.env.CLIENT_ID,
-      client_secret: process.env.CLIENT_SECRET,
-      scope: 'https://graph.microsoft.com/.default',
-      grant_type: 'client_credentials'
-    }),
-    {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
-    }
-  );
-
-  return response.data.access_token;
-}
 
 function cleanText(value) {
 
@@ -51,15 +39,21 @@ function normalize(value) {
     .toLowerCase();
 }
 
-function hasRole(user, role) {
+function normalizeEmployeeId(value) {
 
-  const roles = user.fields.Role || [];
+  return cleanText(value)
+    .replace(/\s+/g, '')
+    .trim()
+    .toLowerCase();
+}
 
-  if (Array.isArray(roles)) {
-    return roles.includes(role);
+function formatAccessories(value) {
+
+  if (Array.isArray(value)) {
+    return value.join(', ');
   }
 
-  return cleanText(roles) === role;
+  return cleanText(value);
 }
 
 function getTodayRange() {
@@ -67,35 +61,115 @@ function getTodayRange() {
   const today = new Date();
 
   return {
-    startOfDay: new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
-    ).toISOString(),
 
-    endOfDay: new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() + 1
-    ).toISOString()
+    startOfDay:
+      new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      ).toISOString(),
+
+    endOfDay:
+      new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() + 1
+      ).toISOString()
   };
 }
 
+// ======================
+// GRAPH TOKEN
+// ======================
+
+async function getGraphToken() {
+
+  const response =
+    await axios.post(
+      `https://login.microsoftonline.com/${process.env.TENANT_ID}/oauth2/v2.0/token`,
+
+      new URLSearchParams({
+
+        client_id:
+          process.env.CLIENT_ID,
+
+        client_secret:
+          process.env.CLIENT_SECRET,
+
+        scope:
+          'https://graph.microsoft.com/.default',
+
+        grant_type:
+          'client_credentials'
+      }),
+
+      {
+        headers: {
+          'Content-Type':
+            'application/x-www-form-urlencoded'
+        }
+      }
+    );
+
+  return response.data.access_token;
+}
+
+// ======================
+// SHAREPOINT HELPERS
+// ======================
+
 async function getListItems(listId) {
 
-  const token = await getGraphToken();
+  const token =
+    await getGraphToken();
 
-  const response = await axios.get(
-    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${listId}/items?expand=fields`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
+  const response =
+    await axios.get(
+
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${listId}/items?expand=fields`,
+
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`
+        }
       }
-    }
-  );
+    );
 
   return response.data.value;
 }
+
+async function updateListItemFields(
+  listId,
+  itemId,
+  fields
+) {
+
+  const token =
+    await getGraphToken();
+
+  await axios.patch(
+
+    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${listId}/items/${itemId}/fields`,
+
+    fields,
+
+    {
+      headers: {
+
+        Authorization:
+          `Bearer ${token}`,
+
+        'Content-Type':
+          'application/json'
+      }
+    }
+  );
+}
+
+// ======================
+// BOT USERS
+// ======================
 
 async function getAllBotUsers() {
 
@@ -106,76 +180,236 @@ async function getAllBotUsers() {
 
 async function getBotUser(telegramId) {
 
-  const users = await getAllBotUsers();
+  const users =
+    await getAllBotUsers();
+
+  return users.find(user =>
+
+    cleanText(
+      user.fields.TelegramUserID
+    ) === String(telegramId)
+
+  ) || null;
+}
+
+async function getAnyBotUser(
+  telegramId
+) {
+
+  const users =
+    await getAllBotUsers();
+
+  return users.find(user =>
+
+    cleanText(
+      user.fields.TelegramUserID
+    ) === String(telegramId)
+
+  ) || null;
+}
+
+async function findBotUserByRegistration(
+  firstName,
+  lastName,
+  employeeId
+) {
+
+  const users =
+    await getAllBotUsers();
+
+  const submittedFullName =
+    normalize(
+      `${firstName} ${lastName}`
+    );
+
+  const submittedEmployeeId =
+    normalizeEmployeeId(
+      employeeId
+    );
 
   return users.find(user => {
 
+    const fullName =
+      normalize(
+        user.fields.Title ||
+        user.fields.LinkTitle
+      );
+
+    const listEmployeeId =
+      normalizeEmployeeId(
+        user.fields[EMPLOYEE_ID_FIELD]
+      );
+
     return (
-      cleanText(user.fields.TelegramUserID) === String(telegramId) &&
-      user.fields.Active === true
+      fullName === submittedFullName &&
+      listEmployeeId === submittedEmployeeId
     );
 
   }) || null;
 }
 
-async function getAnyBotUser(telegramId) {
+async function registerBotUser(
+  botUserItem,
+  telegramId
+) {
 
-  const users = await getAllBotUsers();
+  await updateListItemFields(
 
-  return users.find(user => {
+    process.env.BOT_USERS_LIST_ID,
 
-    return (
-      cleanText(user.fields.TelegramUserID) === String(telegramId)
-    );
+    botUserItem.id,
 
-  }) || null;
-}
-
-async function findBotUserByName(name) {
-
-  const users = await getAllBotUsers();
-
-  const searchName = normalize(name);
-
-  return users.find(user => {
-
-    const fullName = normalize(
-      user.fields.Title ||
-      user.fields.LinkTitle
-    );
-
-    return (
-      fullName === searchName ||
-      fullName.includes(searchName) ||
-      searchName.includes(fullName)
-    );
-
-  }) || null;
-}
-
-async function createPendingBotUser(ctx) {
-
-  const token = await getGraphToken();
-
-  const fullName =
-    `${ctx.from.first_name || ''} ${ctx.from.last_name || ''}`.trim();
-
-  await axios.post(
-    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/items`,
     {
-      fields: {
-        Title: fullName || ctx.from.username || 'Pending User',
-        TelegramUserID: String(ctx.from.id)
-      }
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+      TelegramUserID:
+        String(telegramId),
+
+      Active: true
     }
   );
 }
+
+// ======================
+// START COMMAND
+// ======================
+
+bot.start(async (ctx) => {
+
+  try {
+
+    const activeUser =
+      await getBotUser(ctx.from.id);
+
+    if (activeUser) {
+
+      return ctx.reply(
+`✅ Welcome ${activeUser.fields.Title || activeUser.fields.LinkTitle}!
+
+Use /submit to submit your shift report.
+Use /help to see all commands.`
+      );
+    }
+
+    const existingUser =
+      await getAnyBotUser(ctx.from.id);
+
+    if (existingUser) {
+
+      return ctx.reply(
+`⏳ Your Telegram account is already linked but not active.
+
+Please contact your administrator.`
+      );
+    }
+
+    sessions[ctx.from.id] = {
+
+      type: 'registerUser',
+
+      step: 'firstName',
+
+      data: {}
+    };
+
+    return ctx.reply(
+`Welcome to TechSidBot.
+
+To verify your access, please enter your first name.`
+    );
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data || error.message
+    );
+
+    return ctx.reply(
+      '❌ Could not start registration. Please contact your administrator.'
+    );
+  }
+});
+
+// ======================
+// HELP COMMAND
+// ======================
+
+bot.command('help', (ctx) => {
+
+  ctx.reply(
+`📋 Commands
+
+/start - Start bot
+/submit - Submit shift report
+/mysales - View your sales
+/leaderboard - Daily leaderboard
+/teamtoday - Team report
+/mytablet - View assigned tablets
+/assigntablet - Assign tablet
+/accepttablet - Accept assigned tablet
+/help - Help menu`
+  );
+});
+
+// ======================
+// DEBUG USER COLUMNS
+// ======================
+
+bot.command('usercolumns', async (ctx) => {
+
+  await ctx.reply(
+    'Checking Bot Users columns...'
+  );
+
+  try {
+
+    const token =
+      await getGraphToken();
+
+    const response =
+      await axios.get(
+
+        `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/columns`,
+
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+    const employeeColumn =
+      response.data.value.find(col =>
+
+        cleanText(
+          col.displayName
+        )
+        .toLowerCase()
+        .includes('employee')
+
+      );
+
+    if (!employeeColumn) {
+
+      return ctx.reply(
+        'Employee ID column not found.'
+      );
+    }
+
+    return ctx.reply(
+      `${employeeColumn.displayName} = ${employeeColumn.name}`
+    );
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data || error.message
+    );
+
+    return ctx.reply(
+      '❌ Could not get user columns.'
+    );
+  }
+});
 
 // ======================
 // SALES FUNCTIONS
@@ -183,28 +417,35 @@ async function createPendingBotUser(ctx) {
 
 async function hasSubmittedToday(telegramId) {
 
-  const { startOfDay, endOfDay } =
-    getTodayRange();
+  const {
+    startOfDay,
+    endOfDay
+  } = getTodayRange();
 
   const submissions =
     await getListItems(
       process.env.REP_SUBMISSIONS_LIST_ID
     );
 
-  return submissions.some(item => {
+  return submissions.some(item =>
 
-    return (
-      cleanText(item.fields.TelegramUserID) === String(telegramId) &&
-      item.fields.ShiftDate >= startOfDay &&
-      item.fields.ShiftDate < endOfDay
-    );
+    cleanText(
+      item.fields.TelegramUserID
+    ) === String(telegramId) &&
 
-  });
+    item.fields.ShiftDate >= startOfDay &&
+    item.fields.ShiftDate < endOfDay
+  );
 }
 
-async function createSubmission(ctx, data, userData) {
+async function createSubmission(
+  ctx,
+  data,
+  userData
+) {
 
-  const token = await getGraphToken();
+  const token =
+    await getGraphToken();
 
   const totalDonations =
     data.d10 +
@@ -215,7 +456,9 @@ async function createSubmission(ctx, data, userData) {
     data.d40;
 
   await axios.post(
+
     `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.REP_SUBMISSIONS_LIST_ID}/items`,
+
     {
       fields: {
 
@@ -265,14 +508,356 @@ async function createSubmission(ctx, data, userData) {
           'Submitted'
       }
     },
+
     {
       headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        Authorization:
+          `Bearer ${token}`,
+
+        'Content-Type':
+          'application/json'
       }
     }
   );
 }
+
+// ======================
+// SUBMIT SALES
+// ======================
+
+bot.command('submit', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+      return ctx.reply(
+        '❌ Unauthorized.'
+      );
+    }
+
+    const alreadySubmitted =
+      await hasSubmittedToday(
+        ctx.from.id
+      );
+
+    if (alreadySubmitted) {
+
+      return ctx.reply(
+        '❌ You have already submitted your shift report today.'
+      );
+    }
+
+    sessions[ctx.from.id] = {
+
+      type:
+        'submitSales',
+
+      step:
+        'd10',
+
+      data:
+        {},
+
+      user: {
+
+        RepName:
+          user.fields.Title ||
+          user.fields.LinkTitle ||
+          '',
+
+        RepEmail:
+          user.fields.Email ||
+          '',
+
+        TLName:
+          user.fields.TL_x002f_MangerName ||
+          '',
+
+        MarketCity:
+          user.fields.Market_x002f_City ||
+          ''
+      }
+    };
+
+    return ctx.reply(
+      'How many $10 donations did you get?'
+    );
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data ||
+      error.message
+    );
+
+    return ctx.reply(
+      '❌ Could not start submission.'
+    );
+  }
+});
+
+// ======================
+// MY SALES
+// ======================
+
+bot.command('mysales', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+      return ctx.reply(
+        '❌ Unauthorized.'
+      );
+    }
+
+    const {
+      startOfDay,
+      endOfDay
+    } = getTodayRange();
+
+    const submissions =
+      await getListItems(
+        process.env.REP_SUBMISSIONS_LIST_ID
+      );
+
+    const mySubmissions =
+      submissions.filter(item =>
+
+        cleanText(
+          item.fields.TelegramUserID
+        ) === String(ctx.from.id) &&
+
+        item.fields.ShiftDate >= startOfDay &&
+        item.fields.ShiftDate < endOfDay
+      );
+
+    if (mySubmissions.length === 0) {
+
+      return ctx.reply(
+        'You have not submitted any sales today yet.'
+      );
+    }
+
+    const item =
+      mySubmissions[0].fields;
+
+    return ctx.reply(
+`📊 My Sales Today
+
+$10: ${item._x0024_10Donations || 0}
+$20: ${item._x0024_20Donations || 0}
+$25: ${item._x0024_25Donations || 0}
+$30: ${item._x0024_30Donations || 0}
+$35: ${item._x0024_35Donations || 0}
+$40: ${item._x0024_40Donations || 0}
+
+🔥 Total Donations:
+${item.TotalDonations || 0}
+
+📌 Status:
+${item.Status || 'Submitted'}`
+    );
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data ||
+      error.message
+    );
+
+    return ctx.reply(
+      '❌ Failed to load your sales.'
+    );
+  }
+});
+
+// ======================
+// LEADERBOARD
+// ======================
+
+bot.command('leaderboard', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+
+      return ctx.reply(
+        '❌ Unauthorized.'
+      );
+    }
+
+    const {
+      startOfDay,
+      endOfDay
+    } = getTodayRange();
+
+    const submissions =
+      await getListItems(
+        process.env.REP_SUBMISSIONS_LIST_ID
+      );
+
+    const leaderboard =
+      submissions
+
+      .filter(item =>
+
+        item.fields.ShiftDate >= startOfDay &&
+        item.fields.ShiftDate < endOfDay
+      )
+
+      .map(item => ({
+
+        rep:
+          cleanText(
+            item.fields.RepName
+          ),
+
+        total:
+          item.fields.TotalDonations || 0
+      }))
+
+      .sort((a, b) =>
+        b.total - a.total
+      );
+
+    if (leaderboard.length === 0) {
+
+      return ctx.reply(
+        'No submissions today yet.'
+      );
+    }
+
+    let message =
+      '🏆 Today’s Leaderboard\n\n';
+
+    leaderboard.forEach((item, index) => {
+
+      message +=
+`${index + 1}. ${item.rep} - ${item.total}\n`;
+    });
+
+    return ctx.reply(message);
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data ||
+      error.message
+    );
+
+    return ctx.reply(
+      '❌ Failed to load leaderboard.'
+    );
+  }
+});
+
+// ======================
+// TEAM TODAY
+// ======================
+
+bot.command('teamtoday', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+
+      return ctx.reply(
+        '❌ Unauthorized.'
+      );
+    }
+
+    const role =
+      cleanText(user.fields.Role);
+
+    if (
+      role !== 'TL' &&
+      role !== 'Admin'
+    ) {
+
+      return ctx.reply(
+        '❌ Only TL/Admin can use this command.'
+      );
+    }
+
+    const {
+      startOfDay,
+      endOfDay
+    } = getTodayRange();
+
+    const tlName =
+      cleanText(
+        user.fields.Title ||
+        user.fields.LinkTitle
+      );
+
+    const submissions =
+      await getListItems(
+        process.env.REP_SUBMISSIONS_LIST_ID
+      );
+
+    const teamSubs =
+      submissions.filter(item =>
+
+        cleanText(
+          item.fields.TLName
+        ) === tlName &&
+
+        item.fields.ShiftDate >= startOfDay &&
+        item.fields.ShiftDate < endOfDay
+      );
+
+    if (teamSubs.length === 0) {
+
+      return ctx.reply(
+        'No team submissions today.'
+      );
+    }
+
+    let total = 0;
+
+    let message =
+      '📊 Team Today\n\n';
+
+    teamSubs.forEach(item => {
+
+      const repTotal =
+        item.fields.TotalDonations || 0;
+
+      total += repTotal;
+
+      message +=
+`${cleanText(item.fields.RepName)} - ${repTotal}\n`;
+    });
+
+    message +=
+`\n🔥 Team Total: ${total}`;
+
+    return ctx.reply(message);
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data ||
+      error.message
+    );
+
+    return ctx.reply(
+      '❌ Failed to load team report.'
+    );
+  }
+});
 
 // ======================
 // TABLET FUNCTIONS
@@ -285,38 +870,41 @@ async function assignTablet(
   assignedByName
 ) {
 
-  const token = await getGraphToken();
-
   const tablets =
     await getListItems(
       process.env.TABLET_INVENTORY_LIST_ID
     );
 
-  const tablet = tablets.find(item => {
+  const tablet =
+    tablets.find(item =>
 
-    return (
-      normalize(item.fields.LinkTitle) ===
-      normalize(tabletId)
+      normalize(
+        item.fields.LinkTitle
+      ) === normalize(tabletId)
     );
 
-  });
-
   if (!tablet) {
-    throw new Error('Tablet not found');
+
+    throw new Error(
+      'Tablet not found'
+    );
   }
 
-  const assigneeName = cleanText(
-    assigneeUser.fields.Title ||
-    assigneeUser.fields.LinkTitle
-  );
+  const assigneeName =
+    cleanText(
+      assigneeUser.fields.Title ||
+      assigneeUser.fields.LinkTitle
+    );
 
-  const assigneeMarket = cleanText(
-    assigneeUser.fields.Market_x002f_City
-  );
+  const assigneeMarket =
+    cleanText(
+      assigneeUser.fields.Market_x002f_City
+    );
 
-  const assigneeManager = cleanText(
-    assigneeUser.fields.TL_x002f_MangerName
-  );
+  const assigneeManager =
+    cleanText(
+      assigneeUser.fields.TL_x002f_MangerName
+    );
 
   const updateFields = {
 
@@ -343,21 +931,20 @@ async function assignTablet(
 
   } else {
 
-    updateFields.CurrentHolder = assigneeName;
+    updateFields.CurrentHolder =
+      assigneeName;
 
     updateFields.Manager =
       assigneeManager || assignedByName;
   }
 
-  await axios.patch(
-    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.TABLET_INVENTORY_LIST_ID}/items/${tablet.id}/fields`,
-    updateFields,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    }
+  await updateListItemFields(
+
+    process.env.TABLET_INVENTORY_LIST_ID,
+
+    tablet.id,
+
+    updateFields
   );
 }
 
@@ -367,414 +954,44 @@ async function acceptTablet(
   repName
 ) {
 
-  const token = await getGraphToken();
-
   const accessories =
 `Charging Cable: ${tabletData.chargingCable}
 Charging Block: ${tabletData.chargingBlock}`;
 
-  await axios.patch(
-    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.TABLET_INVENTORY_LIST_ID}/items/${tabletItemId}/fields`,
+  await updateListItemFields(
+
+    process.env.TABLET_INVENTORY_LIST_ID,
+
+    tabletItemId,
+
     {
-      Status: 'Active',
-      LeadAccepted: true,
-      Condition: tabletData.condition,
-      Accessories: accessories,
-      PowerOn: tabletData.powerOn,
-      Notes: tabletData.notes,
-      LastActionBy: repName,
-      TransferDate: new Date().toISOString()
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+
+      Status:
+        'Active',
+
+      LeadAccepted:
+        true,
+
+      Condition:
+        tabletData.condition,
+
+      Accessories:
+        accessories,
+
+      PowerOn:
+        tabletData.powerOn,
+
+      Notes:
+        tabletData.notes,
+
+      LastActionBy:
+        repName,
+
+      TransferDate:
+        new Date().toISOString()
     }
   );
 }
-
-// ======================
-// START / HELP
-// ======================
-
-bot.start(async (ctx) => {
-
-  const activeUser =
-    await getBotUser(ctx.from.id);
-
-  if (activeUser) {
-
-    return ctx.reply(
-`✅ Welcome ${activeUser.fields.Title || activeUser.fields.LinkTitle}!
-
-Use /submit to submit your shift report.
-
-Use /help to see all commands.`
-    );
-  }
-
-  const existingUser =
-    await getAnyBotUser(ctx.from.id);
-
-  if (existingUser) {
-
-    return ctx.reply(
-`⏳ Your access request is pending approval.
-
-Management must activate your account before you can use the bot.`
-    );
-  }
-
-  try {
-
-    await createPendingBotUser(ctx);
-
-    return ctx.reply(
-`✅ Access request submitted successfully.
-
-Your Telegram ID:
-${ctx.from.id}
-
-Management will approve your account shortly.`
-    );
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    return ctx.reply(
-`❌ Could not submit access request.
-
-Please contact your administrator.`
-    );
-  }
-});
-
-bot.command('help', (ctx) => {
-
-  ctx.reply(
-`📋 Commands
-
-/start - Start bot
-/submit - Submit shift report
-/mysales - View your sales
-/leaderboard - Daily leaderboard
-/teamtoday - Team report
-/mytablet - View assigned tablets
-/assigntablet - Assign tablet
-/accepttablet - Accept assigned tablet
-/help - Help menu`
-  );
-});
-
-// ======================
-// SALES COMMANDS
-// ======================
-
-bot.command('submit', async (ctx) => {
-
-  try {
-
-    const user =
-      await getBotUser(ctx.from.id);
-
-    if (!user) {
-
-      return ctx.reply(
-        '❌ Unauthorized.'
-      );
-    }
-
-    const alreadySubmitted =
-      await hasSubmittedToday(ctx.from.id);
-
-    if (alreadySubmitted) {
-
-      return ctx.reply(
-        '❌ You have already submitted your shift report today.'
-      );
-    }
-
-    sessions[ctx.from.id] = {
-
-      type: 'submitSales',
-
-      step: 'd10',
-
-      data: {},
-
-      user: {
-
-        RepName:
-          user.fields.Title ||
-          user.fields.LinkTitle ||
-          '',
-
-        RepEmail:
-          user.fields.Email || '',
-
-        TLName:
-          user.fields.TL_x002f_MangerName || '',
-
-        MarketCity:
-          user.fields.Market_x002f_City || ''
-      }
-    };
-
-    ctx.reply(
-      'How many $10 donations did you get?'
-    );
-
-  } catch (error) {
-
-    console.log(
-      error.response?.data || error.message
-    );
-
-    ctx.reply(
-      '❌ Could not start submission.'
-    );
-  }
-});
-
-bot.command('mysales', async (ctx) => {
-
-  try {
-
-    const user =
-      await getBotUser(ctx.from.id);
-
-    if (!user) {
-
-      return ctx.reply(
-        '❌ Unauthorized.'
-      );
-    }
-
-    const { startOfDay, endOfDay } =
-      getTodayRange();
-
-    const submissions =
-      await getListItems(
-        process.env.REP_SUBMISSIONS_LIST_ID
-      );
-
-    const mySubmissions =
-      submissions.filter(item => {
-
-        return (
-          cleanText(item.fields.TelegramUserID) === String(ctx.from.id) &&
-          item.fields.ShiftDate >= startOfDay &&
-          item.fields.ShiftDate < endOfDay
-        );
-
-      });
-
-    if (mySubmissions.length === 0) {
-
-      return ctx.reply(
-        'You have not submitted any sales today yet.'
-      );
-    }
-
-    const item =
-      mySubmissions[0].fields;
-
-    ctx.reply(
-`📊 My Sales Today
-
-$10: ${item._x0024_10Donations || 0}
-$20: ${item._x0024_20Donations || 0}
-$25: ${item._x0024_25Donations || 0}
-$30: ${item._x0024_30Donations || 0}
-$35: ${item._x0024_35Donations || 0}
-$40: ${item._x0024_40Donations || 0}
-
-🔥 Total Donations:
-${item.TotalDonations || 0}
-
-📌 Status:
-${item.Status || 'Submitted'}`
-    );
-
-  } catch (error) {
-
-    console.log(
-      error.response?.data || error.message
-    );
-
-    ctx.reply(
-      '❌ Failed to load your sales.'
-    );
-  }
-});
-
-// ======================
-// LEADERBOARD
-// ======================
-
-bot.command('leaderboard', async (ctx) => {
-
-  try {
-
-    const user =
-      await getBotUser(ctx.from.id);
-
-    if (!user) {
-      return ctx.reply(
-        '❌ Unauthorized.'
-      );
-    }
-
-    const { startOfDay, endOfDay } =
-      getTodayRange();
-
-    const submissions =
-      await getListItems(
-        process.env.REP_SUBMISSIONS_LIST_ID
-      );
-
-    const leaderboard =
-      submissions
-        .filter(item => {
-
-          return (
-            item.fields.ShiftDate >= startOfDay &&
-            item.fields.ShiftDate < endOfDay
-          );
-
-        })
-        .map(item => ({
-
-          rep:
-            cleanText(item.fields.RepName),
-
-          total:
-            item.fields.TotalDonations || 0
-
-        }))
-        .sort((a, b) => b.total - a.total);
-
-    if (leaderboard.length === 0) {
-
-      return ctx.reply(
-        'No submissions today yet.'
-      );
-    }
-
-    let message =
-      '🏆 Today’s Leaderboard\n\n';
-
-    leaderboard.forEach((item, index) => {
-
-      message +=
-`${index + 1}. ${item.rep} - ${item.total}\n`;
-
-    });
-
-    ctx.reply(message);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    ctx.reply(
-      '❌ Failed to load leaderboard.'
-    );
-  }
-});
-
-// ======================
-// TEAM TODAY
-// ======================
-
-bot.command('teamtoday', async (ctx) => {
-
-  try {
-
-    const user =
-      await getBotUser(ctx.from.id);
-
-    if (!user) {
-      return ctx.reply(
-        '❌ Unauthorized.'
-      );
-    }
-
-    if (
-      !hasRole(user, 'TL') &&
-      !hasRole(user, 'Admin')
-    ) {
-
-      return ctx.reply(
-        '❌ Only TL/Admin can use this command.'
-      );
-    }
-
-    const { startOfDay, endOfDay } =
-      getTodayRange();
-
-    const tlName =
-      cleanText(
-        user.fields.Title ||
-        user.fields.LinkTitle
-      );
-
-    const submissions =
-      await getListItems(
-        process.env.REP_SUBMISSIONS_LIST_ID
-      );
-
-    const teamSubs =
-      submissions.filter(item => {
-
-        return (
-          cleanText(item.fields.TLName) === tlName &&
-          item.fields.ShiftDate >= startOfDay &&
-          item.fields.ShiftDate < endOfDay
-        );
-
-      });
-
-    if (teamSubs.length === 0) {
-
-      return ctx.reply(
-        'No team submissions today.'
-      );
-    }
-
-    let total = 0;
-
-    let message =
-      '📊 Team Today\n\n';
-
-    teamSubs.forEach(item => {
-
-      const repTotal =
-        item.fields.TotalDonations || 0;
-
-      total += repTotal;
-
-      message +=
-`${cleanText(item.fields.RepName)} - ${repTotal}\n`;
-
-    });
-
-    message +=
-`\n🔥 Team Total: ${total}`;
-
-    ctx.reply(message);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    ctx.reply(
-      '❌ Failed to load team report.'
-    );
-  }
-});
 
 // ======================
 // MY TABLET
@@ -788,15 +1005,17 @@ bot.command('mytablet', async (ctx) => {
       await getBotUser(ctx.from.id);
 
     if (!user) {
+
       return ctx.reply(
         '❌ Unauthorized.'
       );
     }
 
-    const repName = normalize(
-      user.fields.Title ||
-      user.fields.LinkTitle
-    );
+    const repName =
+      normalize(
+        user.fields.Title ||
+        user.fields.LinkTitle
+      );
 
     const tablets =
       await getListItems(
@@ -806,9 +1025,10 @@ bot.command('mytablet', async (ctx) => {
     const assignedTablets =
       tablets.filter(item => {
 
-        const holder = normalize(
-          item.fields.CurrentHolder
-        );
+        const holder =
+          normalize(
+            item.fields.CurrentHolder
+          );
 
         return (
           holder === repName ||
@@ -832,7 +1052,8 @@ bot.command('mytablet', async (ctx) => {
 
     assignedTablets.forEach((tablet, index) => {
 
-      const f = tablet.fields;
+      const f =
+        tablet.fields;
 
       message +=
 `${index + 1}. Tablet ID: ${cleanText(f.LinkTitle)}
@@ -843,33 +1064,39 @@ Status: ${cleanText(f.Status)}
 
 Condition: ${cleanText(f.Condition)}
 
-Accessories: ${cleanText(f.Accessories)}
+Accessories: ${formatAccessories(f.Accessories)}
 
 Manager: ${cleanText(f.Manager)}
 
 Market: ${cleanText(f.Market)}
 
-Lead Accepted: ${f.LeadAccepted ? 'Yes' : 'No'}
+Lead Accepted:
+${f.LeadAccepted ? 'Yes' : 'No'}
 
-Transfer Date: ${cleanText(f.TransferDate)}
+Transfer Date:
+${cleanText(f.TransferDate)}
 
-Power On: ${f.PowerOn ? 'Yes' : 'No'}
+Power On:
+${f.PowerOn ? 'Yes' : 'No'}
 
-Notes: ${cleanText(f.Notes)}
+Notes:
+${cleanText(f.Notes)}
 
 -------------------------
 
 `;
-
     });
 
-    ctx.reply(message);
+    return ctx.reply(message);
 
   } catch (error) {
 
-    console.log(error.response?.data || error.message);
+    console.log(
+      error.response?.data ||
+      error.message
+    );
 
-    ctx.reply(
+    return ctx.reply(
       '❌ Failed to load tablet details.'
     );
   }
@@ -887,14 +1114,18 @@ bot.command('assigntablet', async (ctx) => {
       await getBotUser(ctx.from.id);
 
     if (!user) {
+
       return ctx.reply(
         '❌ Unauthorized.'
       );
     }
 
+    const role =
+      cleanText(user.fields.Role);
+
     if (
-      !hasRole(user, 'TL') &&
-      !hasRole(user, 'Admin')
+      role !== 'TL' &&
+      role !== 'Admin'
     ) {
 
       return ctx.reply(
@@ -904,11 +1135,14 @@ bot.command('assigntablet', async (ctx) => {
 
     sessions[ctx.from.id] = {
 
-      type: 'assignTablet',
+      type:
+        'assignTablet',
 
-      step: 'tabletId',
+      step:
+        'tabletId',
 
-      data: {},
+      data:
+        {},
 
       managerName:
         cleanText(
@@ -917,15 +1151,18 @@ bot.command('assigntablet', async (ctx) => {
         )
     };
 
-    ctx.reply(
+    return ctx.reply(
       'Enter the Tablet ID you want to assign.'
     );
 
   } catch (error) {
 
-    console.log(error.response?.data || error.message);
+    console.log(
+      error.response?.data ||
+      error.message
+    );
 
-    ctx.reply(
+    return ctx.reply(
       '❌ Could not start tablet assignment.'
     );
   }
@@ -943,15 +1180,17 @@ bot.command('accepttablet', async (ctx) => {
       await getBotUser(ctx.from.id);
 
     if (!user) {
+
       return ctx.reply(
         '❌ Unauthorized.'
       );
     }
 
-    const repName = normalize(
-      user.fields.Title ||
-      user.fields.LinkTitle
-    );
+    const repName =
+      normalize(
+        user.fields.Title ||
+        user.fields.LinkTitle
+      );
 
     const tablets =
       await getListItems(
@@ -961,9 +1200,10 @@ bot.command('accepttablet', async (ctx) => {
     const pendingTablets =
       tablets.filter(item => {
 
-        const holder = normalize(
-          item.fields.CurrentHolder
-        );
+        const holder =
+          normalize(
+            item.fields.CurrentHolder
+          );
 
         return (
           holder === repName &&
@@ -979,23 +1219,33 @@ bot.command('accepttablet', async (ctx) => {
       );
     }
 
+    // ======================
+    // ONLY 1 TABLET
+    // ======================
+
     if (pendingTablets.length === 1) {
 
-      const tablet = pendingTablets[0];
+      const tablet =
+        pendingTablets[0];
 
       sessions[ctx.from.id] = {
 
-        type: 'acceptTablet',
+        type:
+          'acceptTablet',
 
-        step: 'condition',
+        step:
+          'condition',
 
         tabletItemId:
           tablet.id,
 
         tabletId:
-          cleanText(tablet.fields.LinkTitle),
+          cleanText(
+            tablet.fields.LinkTitle
+          ),
 
-        data: {}
+        data:
+          {}
       };
 
       return ctx.reply(
@@ -1008,7 +1258,7 @@ Current Condition:
 ${cleanText(tablet.fields.Condition)}
 
 Accessories:
-${cleanText(tablet.fields.Accessories)}
+${formatAccessories(tablet.fields.Accessories)}
 
 Is the tablet condition acceptable?
 
@@ -1019,15 +1269,22 @@ NO`
       );
     }
 
+    // ======================
+    // MULTIPLE TABLETS
+    // ======================
+
     sessions[ctx.from.id] = {
 
-      type: 'acceptTablet',
+      type:
+        'acceptTablet',
 
-      step: 'selectTablet',
+      step:
+        'selectTablet',
 
       pendingTablets,
 
-      data: {}
+      data:
+        {}
     };
 
     let message =
@@ -1037,19 +1294,22 @@ NO`
 
     pendingTablets.forEach((tablet, index) => {
 
-      const f = tablet.fields;
+      const f =
+        tablet.fields;
 
       message +=
 `${index + 1}. Tablet ID: ${cleanText(f.LinkTitle)}
 
-Condition: ${cleanText(f.Condition)}
+Condition:
+${cleanText(f.Condition)}
 
-Accessories: ${cleanText(f.Accessories)}
+Accessories:
+${formatAccessories(f.Accessories)}
 
-Power On: ${f.PowerOn ? 'Yes' : 'No'}
+Power On:
+${f.PowerOn ? 'Yes' : 'No'}
 
 `;
-
     });
 
     message +=
@@ -1059,9 +1319,12 @@ Power On: ${f.PowerOn ? 'Yes' : 'No'}
 
   } catch (error) {
 
-    console.log(error.response?.data || error.message);
+    console.log(
+      error.response?.data ||
+      error.message
+    );
 
-    ctx.reply(
+    return ctx.reply(
       '❌ Failed to start tablet acceptance.'
     );
   }
@@ -1102,6 +1365,96 @@ bot.on('text', async (ctx) => {
   try {
 
     // ======================
+    // REGISTRATION FLOW
+    // ======================
+
+    if (session.type === 'registerUser') {
+
+      if (session.step === 'firstName') {
+
+        session.data.firstName =
+          text;
+
+        session.step =
+          'lastName';
+
+        return ctx.reply(
+          'Please enter your last name.'
+        );
+      }
+
+      if (session.step === 'lastName') {
+
+        session.data.lastName =
+          text;
+
+        session.step =
+          'employeeId';
+
+        return ctx.reply(
+          'Please enter your Employee ID.'
+        );
+      }
+
+      if (session.step === 'employeeId') {
+
+        session.data.employeeId =
+          text;
+
+        const matchedUser =
+          await findBotUserByRegistration(
+            session.data.firstName,
+            session.data.lastName,
+            session.data.employeeId
+          );
+
+        if (!matchedUser) {
+
+          delete sessions[userId];
+
+          return ctx.reply(
+            '❌ User not found. Contact your administrator.'
+          );
+        }
+
+        const existingTelegramId =
+          cleanText(
+            matchedUser.fields.TelegramUserID
+          );
+
+        if (
+          existingTelegramId &&
+          existingTelegramId !== String(ctx.from.id)
+        ) {
+
+          delete sessions[userId];
+
+          return ctx.reply(
+            '❌ This Employee ID is already linked to another Telegram account. Please contact your administrator.'
+          );
+        }
+
+        await registerBotUser(
+          matchedUser,
+          ctx.from.id
+        );
+
+        delete sessions[userId];
+
+        return ctx.reply(
+`✅ Registration successful.
+
+Welcome ${
+  matchedUser.fields.Title ||
+  matchedUser.fields.LinkTitle
+}!
+
+Use /help to see available commands.`
+        );
+      }
+    }
+
+    // ======================
     // ASSIGN TABLET FLOW
     // ======================
 
@@ -1109,9 +1462,11 @@ bot.on('text', async (ctx) => {
 
       if (session.step === 'tabletId') {
 
-        session.data.tabletId = text;
+        session.data.tabletId =
+          text;
 
-        session.step = 'assignType';
+        session.step =
+          'assignType';
 
         return ctx.reply(
 `Who are you assigning this tablet to?
@@ -1138,9 +1493,11 @@ TL`
           );
         }
 
-        session.data.assignType = type;
+        session.data.assignType =
+          type;
 
-        session.step = 'assigneeName';
+        session.step =
+          'assigneeName';
 
         if (type === 'REP') {
 
@@ -1157,7 +1514,7 @@ TL`
       if (session.step === 'assigneeName') {
 
         const assigneeUser =
-          await findBotUserByName(text);
+          await findBotUserByRegistrationNameOnly(text);
 
         if (!assigneeUser) {
 
@@ -1185,7 +1542,8 @@ TL`
             assigneeUser.fields.TL_x002f_MangerName
           );
 
-        session.step = 'confirm';
+        session.step =
+          'confirm';
 
         return ctx.reply(
 `Confirm tablet assignment:
@@ -1249,11 +1607,27 @@ or CANCEL to cancel.`
 
     if (session.type === 'acceptTablet') {
 
+      // ======================
+      // SELECT TABLET
+      // ======================
+
       if (session.step === 'selectTablet') {
+
+        const cleanedInput =
+          normalize(text)
+
+            .replace('accept tablet id:', '')
+            .replace('accept tablet:', '')
+            .replace('accept tablet id', '')
+            .replace('accept', '')
+            .trim();
 
         const selectedTablet =
           session.pendingTablets.find(tablet =>
-            normalize(tablet.fields.LinkTitle) === normalize(text)
+
+            normalize(
+              tablet.fields.LinkTitle
+            ) === cleanedInput
           );
 
         if (!selectedTablet) {
@@ -1267,7 +1641,9 @@ or CANCEL to cancel.`
           selectedTablet.id;
 
         session.tabletId =
-          cleanText(selectedTablet.fields.LinkTitle);
+          cleanText(
+            selectedTablet.fields.LinkTitle
+          );
 
         session.step =
           'condition';
@@ -1282,7 +1658,7 @@ Current Condition:
 ${cleanText(selectedTablet.fields.Condition)}
 
 Accessories:
-${cleanText(selectedTablet.fields.Accessories)}
+${formatAccessories(selectedTablet.fields.Accessories)}
 
 Is the tablet condition acceptable?
 
@@ -1292,6 +1668,10 @@ or
 NO`
         );
       }
+
+      // ======================
+      // CONDITION
+      // ======================
 
       if (session.step === 'condition') {
 
@@ -1313,6 +1693,10 @@ NO`
         );
       }
 
+      // ======================
+      // CHARGING CABLE
+      // ======================
+
       if (session.step === 'chargingCable') {
 
         session.data.chargingCable =
@@ -1332,6 +1716,10 @@ or
 NO`
         );
       }
+
+      // ======================
+      // CHARGING BLOCK
+      // ======================
 
       if (session.step === 'chargingBlock') {
 
@@ -1353,6 +1741,10 @@ NO`
         );
       }
 
+      // ======================
+      // POWER ON
+      // ======================
+
       if (session.step === 'powerOn') {
 
         session.data.powerOn =
@@ -1368,6 +1760,10 @@ Type your notes or type:
 NONE`
         );
       }
+
+      // ======================
+      // NOTES
+      // ======================
 
       if (session.step === 'notes') {
 
@@ -1405,9 +1801,15 @@ or CANCEL to cancel.`
         );
       }
 
+      // ======================
+      // FINAL CONFIRM
+      // ======================
+
       if (session.step === 'confirm') {
 
-        if (text.toLowerCase() !== 'yes') {
+        if (
+          text.toLowerCase() !== 'yes'
+        ) {
 
           return ctx.reply(
             'Type YES to confirm or CANCEL to cancel.'
@@ -1438,14 +1840,15 @@ or CANCEL to cancel.`
     }
 
     // ======================
-    // SALES SUBMISSION FLOW
+    // SALES FLOW
     // ======================
 
     if (session.type === 'submitSales') {
 
       const validateNumber = value => {
 
-        const num = Number(value);
+        const num =
+          Number(value);
 
         return (
           Number.isInteger(num) &&
@@ -1469,8 +1872,7 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step =
-            'd20';
+          session.step = 'd20';
 
           return ctx.reply(
             'How many $20 donations did you get?'
@@ -1488,8 +1890,7 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step =
-            'd25';
+          session.step = 'd25';
 
           return ctx.reply(
             'How many $25 donations did you get?'
@@ -1507,8 +1908,7 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step =
-            'd30';
+          session.step = 'd30';
 
           return ctx.reply(
             'How many $30 donations did you get?'
@@ -1526,8 +1926,7 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step =
-            'd35';
+          session.step = 'd35';
 
           return ctx.reply(
             'How many $35 donations did you get?'
@@ -1545,8 +1944,7 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step =
-            'd40';
+          session.step = 'd40';
 
           return ctx.reply(
             'How many $40 donations did you get?'
@@ -1564,8 +1962,7 @@ or CANCEL to cancel.`
             );
           }
 
-          session.step =
-            'confirm';
+          session.step = 'confirm';
 
           return ctx.reply(
 `Confirm submission:
@@ -1593,7 +1990,9 @@ or CANCEL to cancel.`
 
         case 'confirm':
 
-          if (text.toLowerCase() !== 'yes') {
+          if (
+            text.toLowerCase() !== 'yes'
+          ) {
 
             return ctx.reply(
               'Type YES to submit or CANCEL to cancel.'
@@ -1617,7 +2016,8 @@ or CANCEL to cancel.`
   } catch (error) {
 
     console.log(
-      error.response?.data || error.message
+      error.response?.data ||
+      error.message
     );
 
     return ctx.reply(
@@ -1636,39 +2036,6 @@ bot.catch((err) => {
     'Bot error:',
     err
   );
-});
-
-bot.command('usercolumns', async (ctx) => {
-  await ctx.reply('Checking Bot Users columns...');
-
-  try {
-    const token = await getGraphToken();
-
-    const response = await axios.get(
-      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/columns`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    const employeeColumn = response.data.value.find(col =>
-      cleanText(col.displayName).toLowerCase().includes('employee')
-    );
-
-    if (!employeeColumn) {
-      return ctx.reply('Employee ID column not found.');
-    }
-
-    return ctx.reply(
-      `${employeeColumn.displayName} = ${employeeColumn.name}`
-    );
-
-  } catch (error) {
-    console.log(error.response?.data || error.message);
-    return ctx.reply('❌ Could not get user columns.');
-  }
 });
 
 bot.launch();
