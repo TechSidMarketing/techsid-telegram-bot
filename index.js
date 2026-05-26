@@ -1563,6 +1563,67 @@ bot.on('text', async (ctx) => {
   try {
 
     // ======================
+// LIVE SALE FLOW
+// ======================
+
+if (session.type === 'liveSale') {
+
+  if (session.step === 'amount') {
+
+    const amount =
+      Number(text);
+
+    const allowedAmounts =
+      [10, 20, 25, 30, 35, 40];
+
+    if (!allowedAmounts.includes(amount)) {
+
+      return ctx.reply(
+        '❌ Please enter a valid amount: 10, 20, 25, 30, 35, or 40.'
+      );
+    }
+
+    session.data.amount =
+      amount;
+
+    session.step =
+      'confirm';
+
+    return ctx.reply(
+`Confirm sale:
+
+Donation Amount:
+$${amount}
+
+Type YES to save
+or CANCEL to cancel.`
+    );
+  }
+
+  if (session.step === 'confirm') {
+
+    if (text.toLowerCase() !== 'yes') {
+
+      return ctx.reply(
+        'Type YES to save or CANCEL to cancel.'
+      );
+    }
+
+    await createLiveSale(
+      ctx,
+      session.data.amount,
+      session.user
+    );
+
+    delete sessions[userId];
+
+    return ctx.reply(
+      '✅ Sale logged successfully.'
+    );
+  }
+}
+
+    // ======================
     // REGISTRATION FLOW
     // ======================
 
