@@ -12,7 +12,7 @@ const sessions = {};
 // ======================
 
 const EMPLOYEE_ID_FIELD =
-  process.env.EMPLOYEE_ID_FIELD || 'EmployeeID';
+  process.env.EMPLOYEE_ID_FIELD || 'EmployeeNumber';
 
 // ======================
 // HELPERS
