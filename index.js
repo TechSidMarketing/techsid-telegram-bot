@@ -350,68 +350,6 @@ bot.command('help', (ctx) => {
 });
 
 // ======================
-// DEBUG USER COLUMNS
-// ======================
-
-bot.command('usercolumns', async (ctx) => {
-
-  await ctx.reply(
-    'Checking Bot Users columns...'
-  );
-
-  try {
-
-    const token =
-      await getGraphToken();
-
-    const response =
-      await axios.get(
-
-        `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/columns`,
-
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
-        }
-      );
-
-    const employeeColumn =
-      response.data.value.find(col =>
-
-        cleanText(
-          col.displayName
-        )
-        .toLowerCase()
-        .includes('employee')
-
-      );
-
-    if (!employeeColumn) {
-
-      return ctx.reply(
-        'Employee ID column not found.'
-      );
-    }
-
-    return ctx.reply(
-      `${employeeColumn.displayName} = ${employeeColumn.name}`
-    );
-
-  } catch (error) {
-
-    console.log(
-      error.response?.data || error.message
-    );
-
-    return ctx.reply(
-      '❌ Could not get user columns.'
-    );
-  }
-});
-
-// ======================
 // SALES FUNCTIONS
 // ======================
 
@@ -881,12 +819,12 @@ bot.command('teamtoday', async (ctx) => {
     }
 
     const role =
-      cleanText(user.fields.Role);
+  normalize(user.fields.Role);
 
-    if (
-      role !== 'TL' &&
-      role !== 'Admin'
-    ) {
+if (
+  role !== 'tl' &&
+  role !== 'admin'
+) {
 
       return ctx.reply(
         '❌ Only TL/Admin can use this command.'
@@ -1223,12 +1161,12 @@ bot.command('assigntablet', async (ctx) => {
     }
 
     const role =
-      cleanText(user.fields.Role);
+  normalize(user.fields.Role);
 
-    if (
-      role !== 'TL' &&
-      role !== 'Admin'
-    ) {
+if (
+  role !== 'tl' &&
+  role !== 'admin'
+) {
 
       return ctx.reply(
         '❌ Only TL/Admin can assign tablets.'
