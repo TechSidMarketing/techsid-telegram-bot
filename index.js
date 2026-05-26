@@ -1472,6 +1472,33 @@ bot.command('botusercolumns', async (ctx) => {
   }
 });
 
+bot.command('myrole', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+      return ctx.reply('No user found.');
+    }
+
+    return ctx.reply(
+`Role Raw:
+${JSON.stringify(user.fields.Role)}
+
+Role Normalized:
+${normalize(user.fields.Role)}`
+    );
+
+  } catch (error) {
+
+    console.log(error);
+
+    return ctx.reply('Error loading role.');
+  }
+});
+
 bot.command('leaderboard', async (ctx) => {
 
   try {
