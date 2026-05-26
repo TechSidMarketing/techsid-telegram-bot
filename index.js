@@ -678,6 +678,39 @@ ${item.Status || 'Submitted'}`
 });
 
 // ======================
+// CREATE LIST ITEM
+// ======================
+
+async function createListItem(listId, fields) {
+
+  const token =
+    await getGraphToken();
+
+  await axios.post(
+    `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${listId}/items`,
+    {
+      fields
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+}
+
+// ======================
+// CREATE LIVE SALE
+// ======================
+
+async function createLiveSale(
+  ctx,
+  donationAmount,
+  user
+) {
+
+// ======================
 // CREATE LIVE SALE
 // ======================
 
