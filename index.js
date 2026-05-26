@@ -407,6 +407,9 @@ async function createSubmission(
         RepName:
           cleanText(userData.RepName),
 
+        EmployeeID:
+  cleanText(userData.EmployeeID),
+
         RepEmail:
           cleanText(userData.RepEmail),
 
@@ -542,6 +545,9 @@ bot.command('submit', async (ctx) => {
           user.fields.Title ||
           user.fields.LinkTitle ||
           '',
+
+        EmployeeID:
+  user.fields.EmployeeNumber || '',
 
         RepEmail:
           user.fields.Email ||
