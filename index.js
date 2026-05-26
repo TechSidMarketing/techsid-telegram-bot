@@ -1651,11 +1651,15 @@ bot.command('usercolumns', async (ctx) => {
       }
     );
 
-    const columns = response.data.value
-      .map(col => `${col.displayName} = ${col.name}`)
-      .join('\n');
+    const employeeColumn = response.data.value.find(col =>
+  col.displayName.toLowerCase().includes('employee')
+);
 
-    ctx.reply(columns);
+if (!employeeColumn) {
+  return ctx.reply('Employee ID column not found.');
+}
+
+ctx.reply(`${employeeColumn.displayName} = ${employeeColumn.name}`);
   } catch (error) {
     console.log(error.response?.data || error.message);
     ctx.reply('❌ Could not get user columns.');
