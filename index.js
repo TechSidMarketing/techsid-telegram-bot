@@ -740,7 +740,7 @@ async function createLiveSale(
     ),
 
   DonationAmount:
-    Number(donationAmount)
+  `$${donationAmount}`
 };
 
   await createListItem(
