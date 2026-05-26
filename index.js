@@ -712,36 +712,36 @@ async function createLiveSale(
 
   const fields = {
 
-    Title:
-      cleanText(
-        user.fields.Title ||
-        user.fields.LinkTitle
-      ),
+  Title:
+    cleanText(
+      user.fields.LinkTitle ||
+      user.fields.Title
+    ),
 
-    Sale:
-      new Date().toISOString(),
+  Sale:
+    new Date().toISOString(),
 
-    RepEmail:
-      cleanText(
-        user.fields.Email
-      ),
+  RepEmail:
+    cleanText(
+      user.fields.Email
+    ),
 
-    TelegramUserID:
-      String(ctx.from.id),
+  TelegramUserID:
+    String(ctx.from.id),
 
-    TL_x002f_ManagerName:
-      cleanText(
-        user.fields.TL_x002f_MangerName
-      ),
+  TL_x002f_ManagerName:
+    cleanText(
+      user.fields.TL_x002f_MangerName
+    ),
 
-    Market_x002f_City:
-      cleanText(
-        user.fields.Market_x002f_City
-      ),
+  Market_x002f_City:
+    cleanText(
+      user.fields.Market_x002f_City
+    ),
 
-    DonationAmount:
-      donationAmount
-  };
+  DonationAmount:
+    Number(donationAmount)
+};
 
   await createListItem(
     process.env.LIVE_SALES_LIST_ID,
