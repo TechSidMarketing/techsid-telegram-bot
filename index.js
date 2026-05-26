@@ -533,33 +533,69 @@ bot.command('submit', async (ctx) => {
       await getBotUser(ctx.from.id);
 
     if (!user) {
-      return ctx.reply(
-        '❌ Unauthorized.'
-      );
+      return ctx.reply('❌ Unauthorized.');
     }
 
     const alreadySubmitted =
-      await hasSubmittedToday(
-        ctx.from.id
-      );
+      await hasSubmittedToday(ctx.from.id);
 
     if (alreadySubmitted) {
-
       return ctx.reply(
         '❌ You have already submitted your shift report today.'
       );
     }
 
+    const {
+      startOfDay,
+      endOfDay
+    } = getTodayRange();
+
+    const liveSales =
+      await getListItems(
+        process.env.LIVE_SALES_LIST_ID
+      );
+
+    const myLiveSales =
+      liveSales.filter(item =>
+        cleanText(item.fields.TelegramUserID) === String(ctx.from.id) &&
+        item.fields.Sale >= startOfDay &&
+        item.fields.Sale < endOfDay
+      );
+
+    const totals = {
+      d10: 0,
+      d20: 0,
+      d25: 0,
+      d30: 0,
+      d35: 0,
+      d40: 0
+    };
+
+    myLiveSales.forEach(item => {
+
+      const amount =
+        cleanText(item.fields.DonationAmount)
+          .replace('$', '')
+          .trim();
+
+      if (amount === '10') totals.d10 += 1;
+      if (amount === '20') totals.d20 += 1;
+      if (amount === '25') totals.d25 += 1;
+      if (amount === '30') totals.d30 += 1;
+      if (amount === '35') totals.d35 += 1;
+      if (amount === '40') totals.d40 += 1;
+    });
+
     sessions[ctx.from.id] = {
 
       type:
-        'submitSales',
+        'confirmEOD',
 
       step:
-        'd10',
+        'confirm',
 
       data:
-        {},
+        totals,
 
       user: {
 
@@ -582,8 +618,29 @@ bot.command('submit', async (ctx) => {
       }
     };
 
+    const totalDonations =
+      totals.d10 +
+      totals.d20 +
+      totals.d25 +
+      totals.d30 +
+      totals.d35 +
+      totals.d40;
+
     return ctx.reply(
-      'How many $10 donations did you get?'
+`📋 End-of-Day Summary
+
+$10: ${totals.d10}
+$20: ${totals.d20}
+$25: ${totals.d25}
+$30: ${totals.d30}
+$35: ${totals.d35}
+$40: ${totals.d40}
+
+🔥 Total Donations:
+${totalDonations}
+
+Type YES to submit
+or EDIT to adjust.`
     );
 
   } catch (error) {
@@ -594,7 +651,7 @@ bot.command('submit', async (ctx) => {
     );
 
     return ctx.reply(
-      '❌ Could not start submission.'
+      '❌ Could not start end-of-day submission.'
     );
   }
 });
@@ -2127,6 +2184,48 @@ or CANCEL to cancel.`
       }
     }
 
+    // ======================
+// CONFIRM EOD FLOW
+// ======================
+
+if (session.type === 'confirmEOD') {
+
+  if (session.step === 'confirm') {
+
+    if (text.toLowerCase() === 'yes') {
+
+      await createSubmission(
+        ctx,
+        session.data,
+        session.user
+      );
+
+      delete sessions[userId];
+
+      return ctx.reply(
+        '✅ End-of-shift submission saved successfully.'
+      );
+    }
+
+    if (text.toLowerCase() === 'edit') {
+
+      session.type =
+        'submitSales';
+
+      session.step =
+        'd10';
+
+      return ctx.reply(
+        `Enter final $10 donation count. Current: ${session.data.d10}`
+      );
+    }
+
+    return ctx.reply(
+      'Type YES to submit or EDIT to adjust.'
+    );
+  }
+}
+    
     // ======================
     // SALES FLOW
     // ======================
