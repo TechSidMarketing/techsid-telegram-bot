@@ -1502,19 +1502,22 @@ TL`
         if (type === 'REP') {
 
           return ctx.reply(
-            'Enter the rep name.'
+            'Enter the employee ID.'
           );
         }
 
         return ctx.reply(
-          'Enter the TL/Manager name.'
+          'Enter the TL/Manager employee ID.'
         );
       }
 
       if (session.step === 'assigneeName') {
 
-        const assigneeUser =
-          await findBotUserByRegistrationNameOnly(text);
+        const users = await getAllBotUsers();
+
+const assigneeUser = users.find(user =>
+  normalizeEmployeeId(user.fields[EMPLOYEE_ID_FIELD]) === normalizeEmployeeId(text)
+);
 
         if (!assigneeUser) {
 
