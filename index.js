@@ -1639,6 +1639,8 @@ bot.catch((err) => {
 });
 
 bot.command('usercolumns', async (ctx) => {
+  await ctx.reply('Checking Bot Users columns...');
+
   try {
     const token = await getGraphToken();
 
@@ -1652,17 +1654,20 @@ bot.command('usercolumns', async (ctx) => {
     );
 
     const employeeColumn = response.data.value.find(col =>
-  col.displayName.toLowerCase().includes('employee')
-);
+      cleanText(col.displayName).toLowerCase().includes('employee')
+    );
 
-if (!employeeColumn) {
-  return ctx.reply('Employee ID column not found.');
-}
+    if (!employeeColumn) {
+      return ctx.reply('Employee ID column not found.');
+    }
 
-ctx.reply(`${employeeColumn.displayName} = ${employeeColumn.name}`);
+    return ctx.reply(
+      `${employeeColumn.displayName} = ${employeeColumn.name}`
+    );
+
   } catch (error) {
     console.log(error.response?.data || error.message);
-    ctx.reply('❌ Could not get user columns.');
+    return ctx.reply('❌ Could not get user columns.');
   }
 });
 
