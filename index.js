@@ -678,6 +678,55 @@ ${item.Status || 'Submitted'}`
 });
 
 // ======================
+// CREATE LIVE SALE
+// ======================
+
+async function createLiveSale(
+  ctx,
+  donationAmount,
+  user
+) {
+
+  const fields = {
+
+    Title:
+      cleanText(
+        user.fields.Title ||
+        user.fields.LinkTitle
+      ),
+
+    Sale:
+      new Date().toISOString(),
+
+    RepEmail:
+      cleanText(
+        user.fields.Email
+      ),
+
+    TelegramUserID:
+      String(ctx.from.id),
+
+    TL_x002f_ManagerName:
+      cleanText(
+        user.fields.TL_x002f_MangerName
+      ),
+
+    Market_x002f_City:
+      cleanText(
+        user.fields.Market_x002f_City
+      ),
+
+    DonationAmount:
+      donationAmount
+  };
+
+  await createListItem(
+    process.env.LIVE_SALES_LIST_ID,
+    fields
+  );
+}
+
+// ======================
 // LEADERBOARD
 // ======================
 
