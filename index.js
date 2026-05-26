@@ -338,8 +338,9 @@ bot.command('help', (ctx) => {
 `📋 Commands
 
 /start - Start bot
-/submit - Submit shift report
-/mysales - View your sales
+/sale - Log live sale
+/submit - Submit end-of-day report
+/mysales - View today's sales
 /leaderboard - Live sales leaderboard
 /teamtoday - Team report
 /mytablet - View assigned tablets
@@ -1367,135 +1368,6 @@ ${f.PowerOn ? 'Yes' : 'No'}
     return ctx.reply(
       '❌ Failed to start tablet acceptance.'
     );
-  }
-});
-
-bot.command('findlists', async (ctx) => {
-
-  try {
-
-    const token =
-      await getGraphToken();
-
-    const response =
-      await axios.get(
-        `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-    const lists =
-      response.data.value
-        .map(list =>
-`${list.displayName} = ${list.id}`)
-        .join('\n\n');
-
-    return ctx.reply(lists);
-
-  } catch (error) {
-
-    console.log(
-      error.response?.data ||
-      error.message
-    );
-
-    return ctx.reply(
-      '❌ Failed to fetch lists.'
-    );
-  }
-});
-
-bot.command('livecolumns', async (ctx) => {
-
-  try {
-
-    const token =
-      await getGraphToken();
-
-    const response =
-      await axios.get(
-        `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.LIVE_SALES_LIST_ID}/columns`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-    const columns =
-      response.data.value
-        .map(col => `${col.displayName} = ${col.name}`)
-        .join('\n');
-
-    return ctx.reply(columns);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    return ctx.reply('❌ Failed to fetch live sales columns.');
-  }
-});
-
-bot.command('botusercolumns', async (ctx) => {
-
-  try {
-
-    const token =
-      await getGraphToken();
-
-    const response =
-      await axios.get(
-        `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/columns`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-    const columns =
-      response.data.value
-        .map(col => `${col.displayName} = ${col.name}`)
-        .join('\n');
-
-    return ctx.reply(columns);
-
-  } catch (error) {
-
-    console.log(error.response?.data || error.message);
-
-    return ctx.reply('❌ Failed to fetch bot user columns.');
-  }
-});
-
-bot.command('myrole', async (ctx) => {
-
-  try {
-
-    const user =
-      await getBotUser(ctx.from.id);
-
-    if (!user) {
-      return ctx.reply('No user found.');
-    }
-
-    return ctx.reply(
-`Role Raw:
-${JSON.stringify(user.fields.Role)}
-
-Role Normalized:
-${normalize(user.fields.Role)}`
-    );
-
-  } catch (error) {
-
-    console.log(error);
-
-    return ctx.reply('Error loading role.');
   }
 });
 
