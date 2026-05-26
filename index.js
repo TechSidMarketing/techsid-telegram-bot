@@ -340,7 +340,7 @@ bot.command('help', (ctx) => {
 /start - Start bot
 /submit - Submit shift report
 /mysales - View your sales
-/leaderboard - Daily leaderboard
+/leaderboard - Live sales leaderboard
 /teamtoday - Team report
 /mytablet - View assigned tablets
 /assigntablet - Assign tablet
@@ -1477,7 +1477,7 @@ bot.command('botusercolumns', async (ctx) => {
   }
 });
 
-bot.command('livesales', async (ctx) => {
+bot.command('leaderboard', async (ctx) => {
 
   try {
 
