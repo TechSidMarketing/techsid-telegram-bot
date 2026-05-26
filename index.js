@@ -1560,6 +1560,83 @@ bot.command('botusercolumns', async (ctx) => {
   }
 });
 
+bot.command('livesales', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
+
+    const {
+      startOfDay,
+      endOfDay
+    } = getTodayRange();
+
+    const sales =
+      await getListItems(
+        process.env.LIVE_SALES_LIST_ID
+      );
+
+    const todaySales =
+      sales.filter(item =>
+        item.fields.Sale >= startOfDay &&
+        item.fields.Sale < endOfDay
+      );
+
+    if (todaySales.length === 0) {
+      return ctx.reply('No live sales logged today yet.');
+    }
+
+    const leaderboard = {};
+
+    todaySales.forEach(item => {
+
+      const rep =
+        cleanText(item.fields.Title || item.fields.LinkTitle);
+
+      if (!leaderboard[rep]) {
+        leaderboard[rep] = 0;
+      }
+
+      leaderboard[rep] += 1;
+    });
+
+    const ranked =
+      Object.entries(leaderboard)
+        .map(([rep, total]) => ({ rep, total }))
+        .sort((a, b) => b.total - a.total);
+
+    let message =
+      '🏆 Live Sales Leaderboard Today\n\n';
+
+    ranked.forEach((item, index) => {
+      message += `${index + 1}. ${item.rep} - ${item.total}\n`;
+    });
+
+    const totalSales =
+      ranked.reduce((sum, item) => sum + item.total, 0);
+
+    message += `\n🔥 Total Live Sales: ${totalSales}`;
+
+    return ctx.reply(message);
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data ||
+      error.message
+    );
+
+    return ctx.reply(
+      '❌ Failed to load live sales leaderboard.'
+    );
+  }
+});
+
 // ======================
 // TEXT SESSION HANDLER
 // ======================
