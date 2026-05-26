@@ -1638,6 +1638,30 @@ bot.catch((err) => {
   );
 });
 
+bot.command('usercolumns', async (ctx) => {
+  try {
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.BOT_USERS_LIST_ID}/columns`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const columns = response.data.value
+      .map(col => `${col.displayName} = ${col.name}`)
+      .join('\n');
+
+    ctx.reply(columns);
+  } catch (error) {
+    console.log(error.response?.data || error.message);
+    ctx.reply('❌ Could not get user columns.');
+  }
+});
+
 bot.launch();
 
 console.log(
