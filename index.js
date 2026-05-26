@@ -710,16 +710,6 @@ async function createLiveSale(
   user
 ) {
 
-// ======================
-// CREATE LIVE SALE
-// ======================
-
-async function createLiveSale(
-  ctx,
-  donationAmount,
-  user
-) {
-
   const fields = {
 
     Title:
@@ -758,6 +748,62 @@ async function createLiveSale(
     fields
   );
 }
+
+// ======================
+// SALE COMMAND
+// ======================
+
+bot.command('sale', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+
+      return ctx.reply(
+        '❌ Unauthorized.'
+      );
+    }
+
+    sessions[ctx.from.id] = {
+
+      type:
+        'liveSale',
+
+      step:
+        'amount',
+
+      data:
+        {},
+
+      user
+    };
+
+    return ctx.reply(
+`Enter donation amount:
+
+10
+20
+25
+30
+35
+40`
+    );
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data ||
+      error.message
+    );
+
+    return ctx.reply(
+      '❌ Could not start sale entry.'
+    );
+  }
+});
 
 // ======================
 // LEADERBOARD
