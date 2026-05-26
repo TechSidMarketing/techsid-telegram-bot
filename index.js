@@ -1611,7 +1611,7 @@ bot.command('livesales', async (ctx) => {
         .sort((a, b) => b.total - a.total);
 
     let message =
-      '🏆 Live Sales Leaderboard Today\n\n';
+      '🏆 Live Sales Leaderboard\n\n';
 
     ranked.forEach((item, index) => {
       message += `${index + 1}. ${item.rep} - ${item.total}\n`;
@@ -1620,7 +1620,7 @@ bot.command('livesales', async (ctx) => {
     const totalSales =
       ranked.reduce((sum, item) => sum + item.total, 0);
 
-    message += `\n🔥 Total Live Sales: ${totalSales}`;
+    message += `\n🔥 Total Sales: ${totalSales}`;
 
     return ctx.reply(message);
 
