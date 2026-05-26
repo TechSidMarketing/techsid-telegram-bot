@@ -822,8 +822,8 @@ bot.command('teamtoday', async (ctx) => {
   normalize(user.fields.Role);
 
 if (
-  role !== 'tl' &&
-  role !== 'admin'
+  !role.includes('tl') &&
+  !role.includes('admin')
 ) {
 
       return ctx.reply(
@@ -1164,8 +1164,8 @@ bot.command('assigntablet', async (ctx) => {
   normalize(user.fields.Role);
 
 if (
-  role !== 'tl' &&
-  role !== 'admin'
+  !role.includes('tl') &&
+  !role.includes('admin')
 ) {
 
       return ctx.reply(
