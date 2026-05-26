@@ -1368,6 +1368,38 @@ bot.command('findlists', async (ctx) => {
   }
 });
 
+bot.command('livecolumns', async (ctx) => {
+
+  try {
+
+    const token =
+      await getGraphToken();
+
+    const response =
+      await axios.get(
+        `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists/${process.env.LIVE_SALES_LIST_ID}/columns`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+    const columns =
+      response.data.value
+        .map(col => `${col.displayName} = ${col.name}`)
+        .join('\n');
+
+    return ctx.reply(columns);
+
+  } catch (error) {
+
+    console.log(error.response?.data || error.message);
+
+    return ctx.reply('❌ Failed to fetch live sales columns.');
+  }
+});
+
 // ======================
 // TEXT SESSION HANDLER
 // ======================
