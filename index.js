@@ -907,6 +907,18 @@ if (
 });
 
 // ======================
+// TABLET HISTORY
+// ======================
+
+async function logTabletHistory(fields) {
+
+  await createListItem(
+    process.env.TABLET_HISTORY_LIST_ID,
+    fields
+  );
+}
+
+// ======================
 // TABLET FUNCTIONS
 // ======================
 
@@ -995,6 +1007,67 @@ async function assignTablet(
   );
 }
 
+await logTabletHistory({
+
+  TransferDate:
+    new Date().toISOString(),
+
+  TabletID:
+    cleanText(tablet.fields.LinkTitle),
+
+  SerialNumber:
+    cleanText(tablet.fields.SerialNumber),
+
+  FromHolder:
+    cleanText(tablet.fields.CurrentHolder),
+
+  ToHolder:
+    assigneeName,
+
+  FromManager:
+    cleanText(tablet.fields.Manager),
+
+  ToManager:
+    updateFields.Manager,
+
+  Market_x002f_City:
+    assigneeMarket,
+
+  Action:
+    'Assigned',
+
+  Status:
+    'Pending Acceptance',
+
+  Condition:
+    cleanText(tablet.fields.Condition),
+
+  Accessories:
+    cleanText(tablet.fields.Accessories),
+
+  PowerOn:
+    tablet.fields.PowerOn,
+
+  Notes:
+    '',
+
+  TransferredBy:
+    assignedByName,
+
+  AcceptedBy:
+    '',
+
+  TelegramUserID:
+    cleanText(
+      assigneeUser.fields.TelegramUserID
+    ),
+
+  EmployeeID:
+    cleanText(
+      assigneeUser.fields.EmployeeNumber
+    )
+});
+
 async function acceptTablet(
   tabletItemId,
   tabletData,
@@ -1039,6 +1112,63 @@ Charging Block: ${tabletData.chargingBlock}`;
     }
   );
 }
+
+await logTabletHistory({
+
+  TransferDate:
+    new Date().toISOString(),
+
+  TabletID:
+    tabletData.tabletId || '',
+
+  SerialNumber:
+    '',
+
+  FromHolder:
+    repName,
+
+  ToHolder:
+    repName,
+
+  FromManager:
+    '',
+
+  ToManager:
+    '',
+
+  Market_x002f_City:
+    '',
+
+  Action:
+    'Accepted',
+
+  Status:
+    'Active',
+
+  Condition:
+    tabletData.condition,
+
+  Accessories:
+    accessories,
+
+  PowerOn:
+    tabletData.powerOn,
+
+  Notes:
+    tabletData.notes,
+
+  TransferredBy:
+    '',
+
+  AcceptedBy:
+    repName,
+
+  TelegramUserID:
+    '',
+
+  EmployeeID:
+    ''
+});
 
 // ======================
 // MY TABLET
