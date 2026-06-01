@@ -1454,6 +1454,31 @@ bot.command('leaderboard', async (ctx) => {
   }
 });
 
+bot.command('findlists', async (ctx) => {
+  try {
+    const token = await getGraphToken();
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${process.env.SITE_ID}/lists`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const lists = response.data.value
+      .map(list => `${list.displayName} = ${list.id}`)
+      .join('\n\n');
+
+    return ctx.reply(lists);
+
+  } catch (error) {
+    console.log(error.response?.data || error.message);
+    return ctx.reply('❌ Failed to fetch lists.');
+  }
+});
+
 // ======================
 // TEXT SESSION HANDLER
 // ======================
