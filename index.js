@@ -343,7 +343,8 @@ bot.command('help', (ctx) => {
 /mysales - View today's sales
 /leaderboard - Live sales leaderboard
 /teamtoday - Team report
-/mytablet - View assigned tablets
+/mytablet - View your tablets
+/teamtablets - View tablets assigned to your team
 /assigntablet - Assign tablet
 /accepttablet - Accept assigned tablet
 /help - Help menu`
