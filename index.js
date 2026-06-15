@@ -1492,6 +1492,92 @@ bot.command('findlists', async (ctx) => {
 });
 
 // ======================
+// TEAM TABLETS
+// ======================
+
+bot.command('teamtablets', async (ctx) => {
+
+  try {
+
+    const user =
+      await getBotUser(ctx.from.id);
+
+    if (!user) {
+      return ctx.reply('❌ Unauthorized.');
+    }
+
+    const role =
+      normalize(user.fields.Role);
+
+    if (
+      !role.includes('tl') &&
+      !role.includes('admin')
+    ) {
+      return ctx.reply(
+        '❌ Only TL/Admin can use this command.'
+      );
+    }
+
+    const tlName =
+      cleanText(
+        user.fields.Title ||
+        user.fields.LinkTitle
+      );
+
+    const tablets =
+      await getListItems(
+        process.env.TABLET_INVENTORY_LIST_ID
+      );
+
+    const teamTablets =
+      tablets.filter(item =>
+
+        normalize(item.fields.Manager) === normalize(tlName) ||
+        normalize(item.fields.CurrentHolder) === normalize(tlName)
+
+      );
+
+    if (teamTablets.length === 0) {
+      return ctx.reply(
+        '📱 No tablets found under you or your team.'
+      );
+    }
+
+    let message =
+`📱 Team Tablets - ${tlName}
+
+`;
+
+    teamTablets.forEach((tablet, index) => {
+
+      const f = tablet.fields;
+
+      message +=
+`${index + 1}. Tablet ID: ${cleanText(f.LinkTitle)}
+TL/Manager: ${cleanText(f.Manager)}
+Rep Holder: ${cleanText(f.CurrentHolder) || 'Assigned to TL'}
+Status: ${cleanText(f.Status)}
+
+`;
+
+    });
+
+    return ctx.reply(message);
+
+  } catch (error) {
+
+    console.log(
+      error.response?.data ||
+      error.message
+    );
+
+    return ctx.reply(
+      '❌ Failed to load team tablets.'
+    );
+  }
+});
+
+// ======================
 // TEXT SESSION HANDLER
 // ======================
 
