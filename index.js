@@ -1504,7 +1504,9 @@ bot.command('teamtablets', async (ctx) => {
       await getBotUser(ctx.from.id);
 
     if (!user) {
-      return ctx.reply('❌ Unauthorized.');
+      return ctx.reply(
+        '❌ Unauthorized.'
+      );
     }
 
     const role =
@@ -1530,38 +1532,53 @@ bot.command('teamtablets', async (ctx) => {
         process.env.TABLET_INVENTORY_LIST_ID
       );
 
-    const teamTablets =
-      tablets.filter(item =>
+    let teamTablets;
+
+    if (role.includes('admin')) {
+
+      // Admin sees all tablets
+      teamTablets = tablets;
+
+    } else {
+
+      // TL sees only their own/team tablets
+      teamTablets = tablets.filter(item =>
 
         normalize(item.fields.Manager) === normalize(tlName) ||
         normalize(item.fields.CurrentHolder) === normalize(tlName)
 
       );
 
+    }
+
     if (teamTablets.length === 0) {
+
       return ctx.reply(
-        '📱 No tablets found under you or your team.'
+        '📱 No tablets found.'
       );
     }
 
     let message =
-`📱 Team Tablets - ${tlName}
-
-`;
+      role.includes('admin')
+        ? '📱 Company Tablets\n\n'
+        : `📱 Team Tablets - ${tlName}\n\n`;
 
     teamTablets.forEach((tablet, index) => {
 
       const f = tablet.fields;
 
       message +=
-`${index + 1}. Tablet ID: ${cleanText(f.LinkTitle)}
-TL/Manager: ${cleanText(f.Manager)}
-Rep Holder: ${cleanText(f.CurrentHolder) || 'Assigned to TL'}
-Status: ${cleanText(f.Status)}
+`${index + 1}. 📱 ${cleanText(f.LinkTitle)}
+👤 Rep: ${cleanText(f.CurrentHolder) || 'None'}
+👔 TL: ${cleanText(f.Manager)}
+📍 Market: ${cleanText(f.Market)}
+📌 Status: ${cleanText(f.Status)}
 
 `;
 
     });
+
+    message += `📊 Total Tablets: ${teamTablets.length}`;
 
     return ctx.reply(message);
 
@@ -1573,7 +1590,7 @@ Status: ${cleanText(f.Status)}
     );
 
     return ctx.reply(
-      '❌ Failed to load team tablets.'
+      '❌ Failed to load tablet list.'
     );
   }
 });
